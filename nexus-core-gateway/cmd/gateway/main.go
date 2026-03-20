@@ -85,7 +85,8 @@ func main() {
 	// 8. Start Server wrapped in top-level mux for internal APIs
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/telemetry", telemetryHandler(shuffler, telemetry))
-	mux.Handle("/", gatewayHandler) // all other requests go to the proxy
+	mux.HandleFunc("/api/logs", telemetryHandler(shuffler, telemetry)) // Phase 6 requirement
+	mux.Handle("/", gatewayHandler)                                    // all other requests go to the proxy
 
 	port := ":8080"
 	fmt.Printf("[NEXUS] Gateway Active on port %s -> Proxying to %s\n", port, target)

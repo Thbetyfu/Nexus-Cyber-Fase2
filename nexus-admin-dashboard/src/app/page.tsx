@@ -5,59 +5,99 @@ import { Shield, Activity, ShieldAlert, Crosshair, Server, Lock } from "lucide-r
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer
 } from "recharts"
-import { TelemetryLog, generateMockLogs } from "../lib/mock_telemetry"
 
-// Switch to false when backend is ready
-const USE_MOCK_DATA = true;
+// Type definition for Live Telemetry Log
+export interface TelemetryLog {
+  timestamp: string;
+  source_ip: string;
+  attacker_id?: string;
+  geo_location?: string;
+  isp?: string;
+  device_fingerprint?: string;
+  endpoint: string;
+  status: string;
+  threat_detail?: string;
+  latency_ms: number;
+}
 
-const SOCDashboard = () => {
+// Custom Hook for Real-Time SOC Polling (Phase 6)
+function useTelemetry(url: string, intervalMs: number = 1500) {
   const [logs, setLogs] = useState<TelemetryLog[]>([])
   const [history, setHistory] = useState<any[]>([])
-
-  // Dashboard Metrics
-  const metrics = {
-    allowed: logs.filter(l => l.status === "ALLOWED").length * 84, // mock multiplier
-    blocked: logs.filter(l => l.status === "RATE_LIMITED").length * 27,
-    honeypot: logs.filter(l => l.status === "HONEYPOT_REDIRECTED").length * 15,
-    falsePositives: 0
-  }
-
-  const tableContainerRef = useRef<HTMLDivElement>(null)
+  const [metrics, setMetrics] = useState({ allowed: 0, blocked: 0, honeypot: 0 })
+  const [shufflerData, setShufflerData] = useState({ port: 3001, status: "OFFLINE" })
+  const isInitialLoad = useRef(true)
 
   useEffect(() => {
-    // Initial Load
-    setLogs(generateMockLogs(20));
-    setHistory(Array.from({ length: 20 }).map((_, i) => ({
-      time: `T-${20 - i}`,
-      allowed: Math.floor(Math.random() * 50) + 10,
-      honeypot: Math.floor(Math.random() * 5)
-    })))
+    let pollingActive = true;
 
-    // Polling Interval
-    const fetchInterval = setInterval(() => {
-      // Create new mock log
-      const newLogs = generateMockLogs(1)
+    const fetchAPI = async () => {
+      try {
+        const res = await fetch(url)
+        if (!res.ok) return
+        const data = await res.json()
 
-      setLogs((prev) => {
-        const next = [newLogs[0], ...prev] // Put newest at top
-        return next.slice(0, 100)
-      })
+        if (!pollingActive) return;
 
-      // Update Chart
-      const now = new Date().toLocaleTimeString("id-ID", { hour12: false })
-      setHistory((prev) => {
-        const h = {
-          time: now,
-          allowed: Math.floor(Math.random() * 20),
-          honeypot: newLogs[0].status === "HONEYPOT_REDIRECTED" ? 10 : 0
-        }
-        return [...prev, h].slice(-20)
-      })
+        // Parse backend payload
+        const recentLogs = data.recent_logs || []
+        setLogs([...recentLogs].reverse()) // newest top (will render normally and auto-scroll handles it)
 
-    }, 1500)
+        setMetrics({
+          allowed: data.stats.allowed,
+          blocked: data.stats.blocked,
+          honeypot: data.stats.honeypot
+        })
 
-    return () => clearInterval(fetchInterval)
-  }, [])
+        setShufflerData({
+          port: data.mtd.active_port || 3001,
+          status: data.mtd.status || "OFFLINE"
+        })
+
+        // Chart history array
+        const now = new Date().toLocaleTimeString("id-ID", { hour12: false })
+        setHistory(prev => {
+          const point = {
+            time: now,
+            allowed: data.stats.allowed,
+            honeypot: data.stats.honeypot
+          }
+          // if first load, we don't want a huge spike on chart, so we just set history
+          if (isInitialLoad.current) {
+            isInitialLoad.current = false;
+            return Array.from({ length: 20 }).map((_, i) => ({ ...point, time: `-${20 - i}s` }))
+          }
+          return [...prev, point].slice(-20)
+        })
+
+      } catch (err) {
+        console.error("Telemetry Endpoint Error (CORS or Offline)", err)
+      }
+    }
+
+    fetchAPI()
+    const timer = setInterval(fetchAPI, intervalMs)
+    return () => {
+      pollingActive = false;
+      clearInterval(timer)
+    }
+  }, [url, intervalMs])
+
+  return { logs, metrics, history, shufflerData }
+}
+
+const SOCDashboard = () => {
+  // ISO 25010 Asynchronous Real-Time Bridge
+  const { logs, metrics, history, shufflerData } = useTelemetry("http://localhost:8080/api/logs", 1500)
+  const tableContainerRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom of the Rogue Gallery when new row injected
+  useEffect(() => {
+    if (tableContainerRef.current) {
+      // scroll to top actually, since we reversed the array, newest is at the top.
+      tableContainerRef.current.scrollTop = 0;
+    }
+  }, [logs])
 
   return (
     <div className="min-h-screen bg-[#06080b] text-gray-200 font-sans selection:bg-blue-600/30 flex flex-col">
@@ -82,7 +122,7 @@ const SOCDashboard = () => {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 border border-blue-900/40 bg-blue-950/20 rounded px-3 py-1.5 shadow-inner">
             <Server className="w-4 h-4 text-blue-500" />
-            <span className="text-[11px] font-mono text-blue-300">SHUFFLER_PORT: :3001</span>
+            <span className="text-[11px] font-mono text-blue-300">SHUFFLER_PORT: :{shufflerData.port}</span>
           </div>
         </div>
       </header>
