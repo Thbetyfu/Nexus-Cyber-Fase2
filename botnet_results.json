@@ -1,0 +1,13 @@
+{
+  "elapsed_s": 89.78,
+  "total_sent": 5000,
+  "benign_200": 3925,
+  "benign_429_fp": 0,
+  "spam_throttled": 1,
+  "mal_honeypot": 500,
+  "mal_403_revealed": 0,
+  "ram_delta_mb": 13.33,
+  "cpu_delta_pct": -12.9,
+  "avg_latency_ms": 2533.15,
+  "p95_latency_ms": 8110.89
+}

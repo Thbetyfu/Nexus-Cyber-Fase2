@@ -1,0 +1,28 @@
+# Nexus Cyber Gateway — .gitignore
+# ==================================
+
+# Environment secrets — NEVER commit
+.env
+*.env.local
+*.env.production
+
+# Build artifacts
+nexus-core-gateway
+*.exe
+*.out
+
+# Go workspace cache
+vendor/
+
+# Log files (may contain PII / telemetry)
+*.log
+nexus_traffic.log
+
+# Coverage reports
+coverage.out
+coverage.html
+
+# IDE
+.vscode/
+.idea/
+*.swp
