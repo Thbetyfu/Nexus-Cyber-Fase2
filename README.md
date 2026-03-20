@@ -43,7 +43,7 @@ Nexus Cyber diabstraksikan menjadi **3 Lapisan Utama** (The Nexus Shield):
 ## 5. 👥 Use Case Diagram
 
 ```mermaid
-usecaseDiagram
+usecase
     actor User as Valid User / Citizen
     actor Hacker as Attacker / Botnet
     
