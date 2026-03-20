@@ -43,26 +43,16 @@ Nexus Cyber diabstraksikan menjadi **3 Lapisan Utama** (The Nexus Shield):
 ## 5. 👥 Use Case Diagram
 
 ```mermaid
-usecase
-    actor User as Valid User / Citizen
-    actor Hacker as Attacker / Botnet
+graph LR
+    User[Valid User / Citizen] --- Akses((Hit Entry Point))
+    Hacker[Attacker / Botnet] --- Akses
     
-    package "Nexus Cyber Gateway" {
-        usecase "Hit Entry Point (Port 8080)" as (Akses)
-        usecase "Limitasi Banjir Data (Per-IP)" as (MTD)
-        usecase "Inspeksi AI (Reflex & Reasoning)" as (Inpeksi)
-        usecase "Alihkan Ke Target Asli Rahasia" as (ProxyAsli)
-        usecase "Halusinasi Lebur di Honeypot" as (Honeypot)
-    }
-    
-    User --> (Akses)
-    Hacker --> (Akses)
-    
-    (Akses) ..> (MTD) : encompasses
-    (MTD) ..> (Inpeksi) : passes to
-    
-    (Inpeksi) --> (ProxyAsli) : Traffic Normal
-    (Inpeksi) --> (Honeypot) : Terdeteksi Malware / SQLi
+    subgraph Nexus_Gateway[Nexus Cyber Gateway]
+        Akses --> MTD[Token Bucket Limit]
+        MTD --> Inspeksi{Dual-Brain AI}
+        Inspeksi -- Normal --> ProxyAsli[Secret Target Backend]
+        Inspeksi -- Malicious --> Honeypot[(Digital Hallucination)]
+    end
 ```
 
 ---
