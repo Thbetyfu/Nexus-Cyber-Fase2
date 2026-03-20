@@ -89,7 +89,7 @@ func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if isReflexThreat {
 		latency := time.Since(start).Milliseconds()
-		np.Logger.LogTraffic(logger.TelemetryLog{
+		tLog := logger.TelemetryLog{
 			Timestamp:    time.Now(),
 			SourceIP:     r.RemoteAddr,
 			Endpoint:     r.URL.Path,
@@ -97,7 +97,9 @@ func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Status:       "HONEYPOT_REDIRECTED",
 			ThreatDetail: threatType,
 			LatencyMS:    latency,
-		})
+		}
+		np.Logger.EnrichLog(&tLog, r)
+		np.Logger.LogTraffic(tLog)
 
 		// MTD Phase 5: DIGITAL HALLUCINATION
 		// Instead of dropping, silently redirect to Honeypot Tarpit.
@@ -106,14 +108,14 @@ func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Dual-Brain Layer 2: Reasoning (Async - Intent Analysis)
-	go func(tData string, source string, path string) {
+	go func(tData string, source string, path string, req *http.Request) {
 		isMalicious, err := np.Reasoning.AnalyzeIntent(tData)
 		if err != nil {
 			return // Fail-Open on AI timeout
 		}
 
 		if isMalicious {
-			np.Logger.LogTraffic(logger.TelemetryLog{
+			tLog := logger.TelemetryLog{
 				Timestamp:    time.Now(),
 				SourceIP:     source,
 				Endpoint:     path,
@@ -121,21 +123,25 @@ func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Status:       "MALICIOUS_DETECTED_REASONING",
 				ThreatDetail: "Llama3_Intent_Analysis_Malicious",
 				LatencyMS:    time.Since(start).Milliseconds(),
-			})
+			}
+			np.Logger.EnrichLog(&tLog, req)
+			np.Logger.LogTraffic(tLog)
 			fmt.Printf("[ALERT] Reasoning Layer: BYPASS from %s -> Flagged for MTD blacklist\n", source)
 		}
-	}(analysisData, r.RemoteAddr, r.URL.Path)
+	}(analysisData, r.RemoteAddr, r.URL.Path, r)
 
 	// 4. Proxy Traffic to Current MTD Target (atomic load — always fresh)
 	latency := time.Since(start).Milliseconds()
-	np.Logger.LogTraffic(logger.TelemetryLog{
+	tLog := logger.TelemetryLog{
 		Timestamp: time.Now(),
 		SourceIP:  r.RemoteAddr,
 		Endpoint:  r.URL.Path,
 		Method:    r.Method,
 		Status:    "ALLOWED",
 		LatencyMS: latency,
-	})
+	}
+	np.Logger.EnrichLog(&tLog, r)
+	np.Logger.LogTraffic(tLog)
 	np.getProxy().ServeHTTP(w, r)
 }
 

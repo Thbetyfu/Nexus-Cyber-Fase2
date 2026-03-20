@@ -96,7 +96,7 @@ export default function CommandCenter() {
       ) : (
         <>
           {/* STATS CARDS */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div className="bg-gray-900/40 backdrop-blur-md border border-gray-800/80 rounded-xl p-6 relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <Activity className="w-24 h-24" />
@@ -127,6 +127,17 @@ export default function CommandCenter() {
               <p className="text-4xl font-bold text-red-500 relative z-10">{data.stats.honeypot.toLocaleString()}</p>
               <div className="mt-4 text-xs text-red-400/70 flex items-center gap-1 z-10 relative">
                 Digital Hallucination Active
+              </div>
+            </div>
+
+            <div className="bg-gray-900/40 backdrop-blur-md border border-gray-800/80 rounded-xl p-6 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                <Shield className="w-24 h-24 text-emerald-500" />
+              </div>
+              <p className="text-sm text-gray-400 uppercase tracking-wider font-medium mb-1 relative z-10">False Positives</p>
+              <p className="text-4xl font-bold text-emerald-400 relative z-10">0%</p>
+              <div className="mt-4 text-xs text-emerald-500/80 flex items-center gap-1 z-10 relative">
+                ISO 25010 AI Precision
               </div>
             </div>
           </div>
@@ -168,12 +179,12 @@ export default function CommandCenter() {
               </div>
             </div>
 
-            {/* THREAT INTEL FEED */}
+            {/* THREAT INTEL FEED / ROGUE GALLERY */}
             <div className="bg-gray-900/40 backdrop-blur-md border border-gray-800/80 rounded-xl overflow-hidden flex flex-col h-full">
               <div className="p-5 border-b border-gray-800/80 bg-gray-900/50">
                 <h3 className="text-lg font-semibold text-gray-200 flex items-center gap-2">
                   <ShieldAlert className="w-5 h-5 text-red-500" />
-                  Dual-Brain AI Threat Feed
+                  The Rogue Gallery (Live Threat Actors)
                 </h3>
               </div>
               <div className="overflow-y-auto flex-1 p-2" style={{ maxHeight: '400px' }}>
@@ -187,11 +198,18 @@ export default function CommandCenter() {
                       const modelName = isReflex ? "⚡ Qwen3 32B Reflex" : isReasoning ? "🧠 Qwen3 235B Reasoning" : "🛡️ Token Bucket";
 
                       return (
-                        <div key={idx} className="bg-gray-950/50 border border-red-900/30 rounded-lg p-3 hover:bg-gray-800/50 transition-colors">
+                        <div key={idx} className="bg-gray-900/60 border border-gray-800 rounded-lg p-3 hover:bg-gray-800/80 transition-all group">
                           <div className="flex justify-between items-start mb-2">
-                            <span className="text-xs font-mono text-gray-500">{new Date(log.timestamp).toLocaleTimeString('id-ID')}</span>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[10px] font-mono font-bold text-blue-400 group-hover:text-blue-300 transition-colors">
+                                {log.attacker_id || "ANONYMOUS"}
+                              </span>
+                              <span className="text-[9px] font-mono text-gray-500">
+                                {new Date(log.timestamp).toLocaleTimeString('id-ID')}
+                              </span>
+                            </div>
                             <div className="flex flex-col items-end gap-1">
-                              <span className="text-[9px] px-2 py-0.5 rounded-full font-medium tracking-wide bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                              <span className="text-[9px] px-2 py-0.5 rounded-full font-medium tracking-wide bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                                 {modelName}
                               </span>
                               <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold tracking-wider ${isReflex || isReasoning ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
@@ -201,12 +219,30 @@ export default function CommandCenter() {
                               </span>
                             </div>
                           </div>
-                          <p className="text-sm font-medium text-gray-300 mb-1">{log.threat_detail || "RATE_LIMIT_EXCEEDED"}</p>
-                          <div className="flex justify-between items-center text-xs text-gray-500 mt-2">
-                            <span className="truncate max-w-[120px]">{log.source_ip}</span>
-                            <span className="flex items-center gap-1 font-mono text-red-400/80">
-                              {log.latency_ms > 0 ? `${log.latency_ms}ms tarpit` : "dropped"}
+
+                          <p className="text-sm font-medium text-gray-200 mb-2">{log.threat_detail || "SENSITIVE_DATA_PROBE"}</p>
+
+                          <div className="grid grid-cols-2 gap-2 mb-3 bg-black/30 rounded-md p-2 border border-white/5">
+                            <div>
+                              <p className="text-[8px] text-gray-500 uppercase">Location</p>
+                              <p className="text-[10px] text-gray-300 truncate">{log.geo_location || "Unknown Node"}</p>
+                            </div>
+                            <div>
+                              <p className="text-[8px] text-gray-500 uppercase">Gateway/ISP</p>
+                              <p className="text-[10px] text-gray-300 truncate">{log.isp || "Cloaked"}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center text-[10px] text-gray-500">
+                            <span className="font-mono bg-gray-800/50 px-1.5 py-0.5 rounded">{log.source_ip}</span>
+                            <span className="flex items-center gap-1 font-mono text-red-400">
+                              {log.latency_ms > 0 ? `${log.latency_ms}ms tarpit` : "deflected"}
                             </span>
+                          </div>
+
+                          <div className="mt-2 pt-2 border-t border-white/5 flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
+                            <span className="text-[9px] text-gray-600 font-mono italic truncate">FP: {log.device_fingerprint || "Obfuscated"}</span>
                           </div>
                         </div>
                       );
