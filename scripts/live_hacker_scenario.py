@@ -84,22 +84,22 @@ def run_attack_scenario():
     # PHASE 3: BRUTE FORCE / FLOODING (Serangan Balasan)
     # ----------------------------------------------------
     print(f"\n{YELLOW}[STEP 3] RETALIATION: Hacker melakukan Brute Force / DDoS Flooding!{RESET}")
-    print(f"[*] Mengirim 50 permintaan cepat untuk melumpuhkan server...")
+    print(f"[*] Mengirim 150 permintaan sangat cepat untuk melumpuhkan server...")
     
     blocked_count = 0
-    for i in range(50):
+    for i in range(150):
         try:
             r = requests.get(f"{GATEWAY_URL}/api/investors?id=1", timeout=1)
             if r.status_code == 429:
                 blocked_count += 1
-            if i % 10 == 0:
-                print(f"[*] Request {i+1}/50...")
+            if i % 25 == 0:
+                print(f"[*] Request {i+1}/150...")
         except:
             pass
-        time.sleep(0.05) # Kecepatan tinggi
+        time.sleep(0.01) # Kecepatan sangat tinggi (exhaust burst capacity)
 
     print(f"\n{GREEN}🛡️ HASIL: MTD TOKEN BUCKET AKTIF!{RESET}")
-    print(f"{CYAN}[STATS] Dari 50 serangan, {blocked_count} berhasil diblokir secara otonom (429 Too Many Requests).{RESET}")
+    print(f"{CYAN}[STATS] Dari 150 serangan, {blocked_count} berhasil diblokir secara otonom (429 Too Many Requests).{RESET}")
     print(f"{CYAN}[INFO] Server utama tetap stabil karena beban dibuang di firewall MTD.{RESET}")
 
     print_banner("NEXUS CYBER: MISSION ACCOMPLISHED")
