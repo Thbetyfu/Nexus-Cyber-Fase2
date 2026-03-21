@@ -134,6 +134,24 @@ func (ts *TopologyShuffler) selectNewPort(currentPort int) int {
 	return candidates[csrng(len(candidates))]
 }
 
+// ManualShuffle triggers an immediate, unpredicted topology rotation.
+// Part of the @skill-self-repair "Rescue Protocol".
+func (ts *TopologyShuffler) ManualShuffle() {
+	ts.mu.Lock()
+	oldPort := ts.current.Port
+	newPort := ts.selectNewPort(oldPort)
+	ts.current = TargetBackend{Host: ts.baseHost, Port: newPort}
+	ts.lastShuffle = time.Now()
+	newTarget := ts.current
+	ts.mu.Unlock()
+
+	log.Printf("[MTD-PANIC] EMERGENCY SHUFFLE TRIGGERED: :%d -> :%d", oldPort, newPort)
+
+	if ts.onShuffle != nil {
+		go ts.onShuffle(newTarget)
+	}
+}
+
 // csrng returns a cryptographically secure random int in [0, n).
 func csrng(n int) int {
 	max := big.NewInt(int64(n))

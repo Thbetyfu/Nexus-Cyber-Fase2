@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"net"
 	"net/http"
 	"time"
 )
@@ -59,11 +60,28 @@ func (h *HoneypotServer) Start() {
 // tarpitHandler is the core Digital Hallucination logic.
 // Random delay [5s, 10s] defeats attacker timing calibration and drains resources.
 func (h *HoneypotServer) tarpitHandler(w http.ResponseWriter, r *http.Request) {
-	// Log attacker fingerprint for forensics
+	attackerIP, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		attackerIP = r.RemoteAddr
+	}
+
+	// 1. Record IP to Distributed Mem Store (Redis) with TTL
+	if MtdRedis != nil && MtdRedis.Enabled {
+		ctx := r.Context()
+		// Lock IP globally for 24 hours
+		err := MtdRedis.Client.Set(ctx, "honeypot:"+attackerIP, time.Now().String(), 24*time.Hour).Err()
+		if err != nil {
+			log.Printf("[HONEYPOT-REDIS] Failed to record attacker IP: %v", err)
+		} else {
+			log.Printf("[HONEYPOT-REDIS] Recorded attacker IP '%s' with 24h TTL.", attackerIP)
+		}
+	}
+
+	// 2. Log attacker fingerprint for forensics
 	log.Printf("[HONEYPOT-TRAP] Attacker caught: IP=%s | Path=%s | UA=%s",
 		r.RemoteAddr, r.URL.Path, r.Header.Get("User-Agent"))
 
-	// Cryptographically random tarpit within [MinTarpit, MaxTarpit]
+	// 3. Cryptographically random tarpit within [MinTarpit, MaxTarpit]
 	delay := h.randomTarpit()
 	log.Printf("[HONEYPOT-TARPIT] Stalling %s for %v...", r.RemoteAddr, delay.Round(time.Millisecond))
 	time.Sleep(delay)

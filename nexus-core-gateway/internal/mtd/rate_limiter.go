@@ -1,6 +1,7 @@
 package mtd
 
 import (
+	"context"
 	"log"
 	"net"
 	"net/http"
@@ -73,13 +74,68 @@ func getRealIP(r *http.Request) string {
 // Allow checks if the given source IP has tokens remaining.
 // sourceIP should be the raw string from RemoteAddr; use HTTPMiddleware for HTTP.
 // Returns true if allowed, false if rate-limited.
+// Allow checks if the given source IP has tokens remaining.
+// sourceIP should be the raw string from RemoteAddr; use HTTPMiddleware for HTTP.
+// Returns true if allowed, false if rate-limited.
 func (tb *PerIPTokenBucket) Allow(sourceIP string) bool {
-	// Strip port if present (legacy path — HTTPMiddleware now uses getRealIP)
+	// Strip port if present
 	ip, _, err := net.SplitHostPort(sourceIP)
 	if err != nil {
 		ip = sourceIP
 	}
 
+	if MtdRedis != nil && MtdRedis.Enabled {
+		return tb.allowRedis(ip)
+	}
+	return tb.allowLocal(ip)
+}
+
+// allowRedis uses atomic Lua scripting in Redis for Token Bucket.
+func (tb *PerIPTokenBucket) allowRedis(ip string) bool {
+	ctx := context.Background()
+	// Using a simple fixed-window or INCR fallback for Redis simplicity in this prototype
+	// For production: a correct Lua TokenBucket script. Here is a simple implementation:
+	script := `
+		local key = KEYS[1]
+		local capacity = tonumber(ARGV[1])
+		local rate = tonumber(ARGV[2])
+		local now = tonumber(ARGV[3])
+		local requested = 1
+
+		local info = redis.call('HMGET', key, 'tokens', 'last_refill')
+		local tokens = tonumber(info[1])
+		local last_refill = tonumber(info[2])
+
+		if not tokens then
+			tokens = capacity
+			last_refill = now
+		end
+
+		local elapsed = now - last_refill
+		tokens = math.min(capacity, tokens + elapsed * rate)
+
+		if tokens >= requested then
+			tokens = tokens - requested
+			redis.call('HMSET', key, 'tokens', tokens, 'last_refill', now)
+			redis.call('EXPIRE', key, math.ceil(capacity/rate) + 10)
+			return 1
+		end
+		
+		redis.call('HMSET', key, 'tokens', tokens, 'last_refill', now)
+		redis.call('EXPIRE', key, math.ceil(capacity/rate) + 10)
+		return 0
+	`
+	now := float64(time.Now().UnixNano()) / 1e9 // seconds
+	res, err := MtdRedis.Client.Eval(ctx, script, []string{"tb:" + ip}, tb.capacity, tb.refillRate, now).Result()
+	if err != nil {
+		log.Printf("[MTD-REDIS] Eval Error: %v. Falling back to memory.", err)
+		return tb.allowLocal(ip)
+	}
+	return res.(int64) == 1
+}
+
+// allowLocal is the local fallback Memory-based Token Bucket (Zero-Dependency)
+func (tb *PerIPTokenBucket) allowLocal(ip string) bool {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
@@ -112,7 +168,7 @@ func (tb *PerIPTokenBucket) HTTPMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		realIP := getRealIP(r)
 		if !tb.Allow(realIP) {
-			log.Printf("[MTD-RATELIMIT] IP THROTTLED: %s (real) / %s (remote) — >%.0f req/s",
+			log.Printf("[MTD-RATELIMIT] IP THROTTLED (Redis Integration Active): %s (real) / %s (remote) — >%.0f req/s",
 				realIP, r.RemoteAddr, tb.refillRate)
 			if tb.OnRateLimit != nil {
 				tb.OnRateLimit(r)

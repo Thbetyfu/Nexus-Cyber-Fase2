@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+  # Distributed Cache / Token Bucket Store
+  redis:
+    image: redis:7.2-alpine
+    container_name: nexus_redis
+    # Dihapus demi Security Best Practice (Enterprise Grade)
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Core Gateway (Golang)
+  gateway:
+    build:
+      context: ./nexus-core-gateway
+      dockerfile: Dockerfile
+    container_name: nexus_gateway
+    ports:
+      - "8080:8080" # Gateway Port
+      - "9090:9090" # Honeypot Port
+    environment:
+      - REDIS_URL=redis:6379
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - AI_PROVIDER_URL=${AI_PROVIDER_URL}
+      - AI_PROVIDER_KEY=${AI_PROVIDER_KEY}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+
+  # Next.js Command Center SOC
+  dashboard:
+    build:
+      context: ./nexus-admin-dashboard
+      dockerfile: Dockerfile
+    container_name: nexus_dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080/api
+    depends_on:
+      - gateway
+    restart: always
+
+volumes:
+  redis_data:

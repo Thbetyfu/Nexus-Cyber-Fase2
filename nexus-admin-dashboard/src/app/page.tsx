@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useState, useRef } from "react"
-import { Shield, Activity, ShieldAlert, Crosshair, Server, Lock } from "lucide-react"
+import { Shield, Activity, ShieldAlert, Crosshair, Server, Lock, Zap, RotateCcw } from "lucide-react"
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer
 } from "recharts"
@@ -24,7 +24,7 @@ export interface TelemetryLog {
 function useTelemetry(url: string, intervalMs: number = 1500) {
   const [logs, setLogs] = useState<TelemetryLog[]>([])
   const [history, setHistory] = useState<any[]>([])
-  const [metrics, setMetrics] = useState({ allowed: 0, blocked: 0, honeypot: 0 })
+  const [metrics, setMetrics] = useState({ allowed: 0, blocked: 0, honeypot: 0, panics: 0 })
   const [shufflerData, setShufflerData] = useState({ port: 3001, status: "OFFLINE" })
   const isInitialLoad = useRef(true)
 
@@ -46,7 +46,8 @@ function useTelemetry(url: string, intervalMs: number = 1500) {
         setMetrics({
           allowed: data.stats.allowed,
           blocked: data.stats.blocked,
-          honeypot: data.stats.honeypot
+          honeypot: data.stats.honeypot,
+          panics: data.stats.panics
         })
 
         setShufflerData({
@@ -91,6 +92,14 @@ const SOCDashboard = () => {
   const { logs, metrics, history, shufflerData } = useTelemetry("http://localhost:8080/api/logs", 1500)
   const tableContainerRef = useRef<HTMLDivElement>(null)
 
+  const handlePanic = async () => {
+    try {
+      await fetch("http://localhost:8080/api/panic", { method: "POST" })
+    } catch (err) {
+      console.error("Rescue Protocol Trigger Failed", err)
+    }
+  }
+
   // Auto-scroll to bottom of the Rogue Gallery when new row injected
   useEffect(() => {
     if (tableContainerRef.current) {
@@ -120,6 +129,13 @@ const SOCDashboard = () => {
         </div>
 
         <div className="flex items-center gap-4">
+          <button
+            onClick={handlePanic}
+            className="flex items-center gap-2 border border-red-500/40 bg-red-950/20 hover:bg-red-500/20 rounded px-3 py-1.5 shadow-inner transition-all group"
+          >
+            <Zap className="w-4 h-4 text-red-500 group-hover:animate-pulse" />
+            <span className="text-[11px] font-bold text-red-400 tracking-widest">EMERGENCY_RESCUE</span>
+          </button>
           <div className="flex items-center gap-2 border border-blue-900/40 bg-blue-950/20 rounded px-3 py-1.5 shadow-inner">
             <Server className="w-4 h-4 text-blue-500" />
             <span className="text-[11px] font-mono text-blue-300">SHUFFLER_PORT: :{shufflerData.port}</span>
@@ -151,12 +167,12 @@ const SOCDashboard = () => {
               <p className="text-3xl font-bold text-red-500 font-mono tracking-tight relative z-10">{metrics.honeypot.toLocaleString()}</p>
             </div>
 
-            <div className="bg-[#09110d]/80 backdrop-blur border border-emerald-900/30 rounded-xl p-5 shadow-lg group z-10 hover:border-emerald-900/50 transition">
+            <div className="bg-[#0b1218]/80 backdrop-blur border border-blue-900/30 rounded-xl p-5 shadow-lg group z-10 hover:border-blue-900/50 transition">
               <div className="flex justify-between items-start mb-2">
-                <p className="text-xs text-emerald-500/80 uppercase tracking-widest font-bold">False Positives</p>
-                <Crosshair className="w-4 h-4 text-emerald-500/50" />
+                <p className="text-xs text-blue-400/80 uppercase tracking-widest font-bold">Rescue Protocols</p>
+                <RotateCcw className="w-4 h-4 text-blue-500/50 group-hover:rotate-180 transition-transform duration-500" />
               </div>
-              <p className="text-3xl font-bold text-emerald-400 font-mono tracking-tight">0%</p>
+              <p className="text-3xl font-bold text-blue-400 font-mono tracking-tight">{metrics.panics.toLocaleString()}</p>
             </div>
           </div>
 

@@ -84,21 +84,31 @@ OUTPUT: {"classification":"MALICIOUS","confidence":0.98,"threat_type":"SQL_INJEC
 INPUT: {"source_ip":"10.0.0.50","port":"8080","protocol":"HTTP","request_pattern":"POST /api/login (429 req/min)"}
 OUTPUT: {"classification":"SUSPICIOUS","confidence":0.72,"threat_type":"BRUTE_FORCE_ATTEMPT"}`
 
-// NewQwenClient constructs the Reflex Layer client.
-// API key is loaded from GROQ_API_KEY env variable.
+// NewQwenClient constructs the Reflex Layer client dynamically.
+// Designed for Enterprise On-Premise (vLLM) compatibility to satisfy UU PDP.
 func NewQwenClient(model string) *QwenClient {
-	apiKey := os.Getenv("GROQ_API_KEY")
+	apiKey := os.Getenv("AI_PROVIDER_KEY")
 	if apiKey == "" {
-		// Soft warning — allows system start even without key (will fail on actual calls).
-		fmt.Println("[WARN] GROQ_API_KEY not set. Reflex Layer will fail gracefully.")
+		apiKey = os.Getenv("OPENROUTER_API_KEY") // fallback for older configs
 	}
-	if model == "" {
-		model = "qwen3-32b" // Groq's hosted Qwen3-32B model slug
+
+	endpoint := os.Getenv("AI_PROVIDER_URL")
+	if endpoint == "" {
+		// Default to OpenRouter if no on-premise server is configured
+		endpoint = "https://openrouter.ai/api/v1/chat/completions"
 	}
+
+	envModel := os.Getenv("AI_MODEL_REFLEX")
+	if envModel != "" {
+		model = envModel
+	} else if model == "" {
+		model = "qwen/qwen3-32b-instruct"
+	}
+
 	return &QwenClient{
 		APIKey:   apiKey,
 		Model:    model,
-		Endpoint: "https://api.groq.com/openai/v1/chat/completions",
+		Endpoint: endpoint,
 	}
 }
 
@@ -123,12 +133,14 @@ func (q *QwenClient) Classify(meta TrafficMeta) (*QwenResult, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+q.APIKey)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("HTTP-Referer", "https://nexus-cyber.go.id")
 
-	// Strict 50ms hard budget — Groq LPU inference is ultra-fast
-	client := &http.Client{Timeout: 50 * time.Millisecond}
+	// OpenRouter has slightly more routing latency than Groq natively.
+	// Adjusted budget to 1500ms to allow valid AI inferences without dropping.
+	client := &http.Client{Timeout: 1500 * time.Millisecond}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("groq_timeout: %v", err)
+		return nil, fmt.Errorf("openrouter_timeout: %v", err)
 	}
 	defer resp.Body.Close()
 

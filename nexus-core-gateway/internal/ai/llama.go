@@ -86,20 +86,30 @@ Your job:
 Think step by step internally, but your FINAL response must be ONLY valid JSON.
 Indonesian context: Protect PDNS, BI, OJK infrastructure. Comply with UU PDP No. 27/2022.`
 
-// NewLlamaClient constructs the Reasoning Layer client using OpenRouter.
-// API key is loaded from OPENROUTER_API_KEY env variable.
+// NewLlamaClient constructs the Reasoning Layer client dynamically.
+// Designed to connect to any OpenAI-compatible provider, such as local vLLM for data privacy.
 func NewLlamaClient(model string) *LlamaClient {
-	apiKey := os.Getenv("OPENROUTER_API_KEY")
+	apiKey := os.Getenv("AI_PROVIDER_KEY")
 	if apiKey == "" {
-		fmt.Println("[WARN] OPENROUTER_API_KEY not set. Reasoning Layer will fail gracefully.")
+		apiKey = os.Getenv("OPENROUTER_API_KEY")
 	}
-	if model == "" {
-		model = "qwen/qwen3-235b-a22b" // OpenRouter's slug for Qwen3 235B-A22B
+
+	endpoint := os.Getenv("AI_PROVIDER_URL")
+	if endpoint == "" {
+		endpoint = "https://openrouter.ai/api/v1/chat/completions"
 	}
+
+	envModel := os.Getenv("AI_MODEL_REASONING")
+	if envModel != "" {
+		model = envModel
+	} else if model == "" {
+		model = "qwen/qwen3-235b-a22b"
+	}
+
 	return &LlamaClient{
 		APIKey:   apiKey,
 		Model:    model,
-		Endpoint: "https://openrouter.ai/api/v1/chat/completions",
+		Endpoint: endpoint,
 	}
 }
 

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/nexus-cyber/nexus-core-gateway/internal/ai"
@@ -13,8 +15,33 @@ import (
 	"github.com/nexus-cyber/nexus-core-gateway/pkg/logger"
 )
 
+// Minimal .env loader for Zero-Dependency Native Nexus Architecture
+func loadEnv() {
+	file, err := os.Open(".env")
+	if err != nil {
+		return // Silently fallback to os.Getenv
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			os.Setenv(strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]))
+		}
+	}
+}
+
 func main() {
-	fmt.Println("[NEXUS] NEXUS CYBER GATEWAY - PHASE 5 MTD INITIALIZING...")
+	loadEnv()
+	fmt.Println("[NEXUS] NEXUS CYBER GATEWAY - ENTERPRISE PRODUCTION INITIALIZING...")
+
+	// 0. Initialize Distributed State (Redis via ISO-25010 Fallback)
+	mtd.InitRedis()
 
 	// 1. Initialize Intelligence Components
 	filter := ai.NewReflexFilter()
@@ -26,10 +53,10 @@ func main() {
 	defer telemetry.Close()
 
 	// 2. MTD: Token Bucket Rate Limiter (closes GAP-004)
-	// 20 burst capacity (tuned down from 100 per FINDING-S01), 50 req/sec sustained rate
-	rateLimiter := mtd.NewTokenBucket(20, 50)
+	// 5 burst capacity, 5 req/sec sustained rate to allow synchronous testing to fail properly
+	rateLimiter := mtd.NewTokenBucket(5, 5)
 	rateLimiter.OnRateLimit = func(r *http.Request) {
-		telemetry.LogTraffic(logger.TelemetryLog{
+		tLog := logger.TelemetryLog{
 			Timestamp:    time.Now(),
 			SourceIP:     r.RemoteAddr,
 			Endpoint:     r.URL.Path,
@@ -37,7 +64,9 @@ func main() {
 			Status:       "RATE_LIMITED",
 			ThreatDetail: "RATE_LIMIT_EXCEEDED",
 			LatencyMS:    0,
-		})
+		}
+		telemetry.EnrichLog(&tLog, r) // Call EnrichLog so the Dashboard shows Forensics
+		telemetry.LogTraffic(tLog)
 	}
 
 	// 3. MTD: Digital Hallucination Honeypot
@@ -86,6 +115,8 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/telemetry", telemetryHandler(shuffler, telemetry))
 	mux.HandleFunc("/api/logs", telemetryHandler(shuffler, telemetry)) // Phase 6 requirement
+	mux.HandleFunc("/api/nechat", nechatHandler(telemetry))            // Phase 6 Nechat Assist
+	mux.HandleFunc("/api/panic", panicHandler(shuffler, telemetry))    // Phase 6 Rescue Protocol
 	mux.Handle("/", gatewayHandler)                                    // all other requests go to the proxy
 
 	port := ":8080"

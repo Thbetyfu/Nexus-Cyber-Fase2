@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit, Fira_Code } from "next/font/google";
 import "./globals.css";
+import NechatWidget from "../components/NechatWidget";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -28,8 +29,9 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${outfit.variable} ${firaCode.variable} h-full antialiased`}
     >
-      <body suppressHydrationWarning className="min-h-full flex flex-col font-sans">
+      <body suppressHydrationWarning className="min-h-full flex flex-col font-sans relative">
         {children}
+        <NechatWidget />
       </body>
     </html>
   );

@@ -37,6 +37,7 @@ type Logger struct {
 	TotalAllowed  int
 	TotalBlocked  int
 	TotalHoneypot int
+	TotalPanic    int
 
 	// Profiling Cache for performance (ISO 25010 Efficiency)
 	fingerprintCache map[string]TelemetryLog
@@ -89,7 +90,12 @@ func (l *Logger) EnrichLog(log *TelemetryLog, r *http.Request) {
 	log.DeviceFingerprint = fmt.Sprintf("%s (%s)", osInfo, browser)
 
 	// 3. GeoIP Lookup (Simulator via Local/External lookup)
-	if strings.HasPrefix(log.SourceIP, "127.") || log.SourceIP == "::1" || log.SourceIP == "[::1]" {
+	isLocal := strings.HasPrefix(log.SourceIP, "127.") ||
+		strings.HasPrefix(log.SourceIP, "::1") ||
+		strings.HasPrefix(log.SourceIP, "[::1]") ||
+		log.SourceIP == "localhost"
+
+	if isLocal {
 		log.GeoLocation = "Localhost, Nexus Gate"
 		log.ISP = "Internal Loopback"
 	} else {
