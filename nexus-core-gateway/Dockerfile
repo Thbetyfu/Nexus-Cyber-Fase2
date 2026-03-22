@@ -23,8 +23,8 @@ FROM alpine:latest
 
 WORKDIR /app
 
-# Add certificates for HTTPS (OpenRouter API)
-RUN apk --no-cache add ca-certificates tzdata
+# Add certificates for HTTPS (OpenRouter API) and iptables for OS Firewall
+RUN apk --no-cache add ca-certificates tzdata iptables
 
 # Copy the Pre-built binary file from the previous stage
 COPY --from=builder /app/main .

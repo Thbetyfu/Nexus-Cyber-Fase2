@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -52,6 +54,15 @@ func main() {
 	}
 	defer telemetry.Close()
 
+	// Register Real-time AI Event Streaming (Powering the Command Center SOC Terminal)
+	telemetry.OnAIEvent = func(event logger.AIEventLog) {
+		if mtd.MtdRedis != nil && mtd.MtdRedis.Enabled {
+			data, _ := json.Marshal(event)
+			// Broadcast to all active Dashboard SSH-Tunnel-SSE sessions
+			mtd.MtdRedis.Client.Publish(context.Background(), "nexus:ai_stream", data)
+		}
+	}
+
 	// 2. MTD: Token Bucket Rate Limiter (closes GAP-004)
 	// 5 burst capacity, 5 req/sec sustained rate to allow synchronous testing to fail properly
 	rateLimiter := mtd.NewTokenBucket(5, 5)
@@ -75,18 +86,22 @@ func main() {
 	honeypot.Start()
 
 	// 4. Setup Initial Backend Target (Mockup OJK Data Center)
+	backendHost := os.Getenv("TARGET_BACKEND_HOST")
+	if backendHost == "" {
+		backendHost = "host.docker.internal" // Default to Docker Desktop's host bridge
+	}
+
 	target := os.Getenv("TARGET_BACKEND")
 	if target == "" {
-		target = "http://localhost:3001" // ROUTE TO RENTAN BACKEND
+		target = fmt.Sprintf("http://%s:3001", backendHost)
 	}
 
 	// 5. MTD: Topology Shuffler (CSPRNG port rotation)
-	// For this test, we lock the shuffler to port 3001 so traffic correctly reaches the mockup backend.
-	// onShuffle callback updates the proxy atomically (Graceful Handoff).
+	// We use the same backendHost to support Docker -> Host communication.
 	var gateway *proxy.NexusProxy
 
 	shuffler := mtd.NewTopologyShuffler(
-		"localhost", // baseHost
+		backendHost, // baseHost
 		[]int{3001}, // portPool (hanya 3001 untuk test mockup OJK)
 		60,          // rotate every 60 seconds
 		func(newTarget mtd.TargetBackend) {
@@ -108,16 +123,23 @@ func main() {
 		log.Fatalf("[NEXUS] Failed to initiate proxy: %v", err)
 	}
 
-	// 7. Chain: TokenBucket -> NexusProxy (defense-in-depth)
-	gatewayHandler := rateLimiter.HTTPMiddleware(gateway)
+	// 7. Chain: BrowserIntegrity -> TokenBucket -> NexusProxy (defense-in-depth)
+	gatewayHandler := proxy.BrowserIntegrityCheck(rateLimiter.HTTPMiddleware(gateway))
 
 	// 8. Start Server wrapped in top-level mux for internal APIs
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/telemetry", telemetryHandler(shuffler, telemetry))
-	mux.HandleFunc("/api/logs", telemetryHandler(shuffler, telemetry)) // Phase 6 requirement
-	mux.HandleFunc("/api/nechat", nechatHandler(telemetry))            // Phase 6 Nechat Assist
-	mux.HandleFunc("/api/panic", panicHandler(shuffler, telemetry))    // Phase 6 Rescue Protocol
-	mux.Handle("/", gatewayHandler)                                    // all other requests go to the proxy
+	mux.HandleFunc("/api/routes", routesHandler(gateway.Router)) // Zero-Code Onboarding
+	mux.HandleFunc("/api/telemetry", telemetryHandler(shuffler, telemetry, target))
+	mux.HandleFunc("/api/ai-events", aiEventsHandler(telemetry))               // AI Cognitive Core Tracker
+	mux.HandleFunc("/api/ai/stream", aiStreamHandler())                        // SSE for Live CLI
+	mux.HandleFunc("/api/ai/status", aiStatusHandler())                        // Health Check
+	mux.HandleFunc("/api/cli/execute", cliExecuteHandler(telemetry))           // Interactive Terminal CLI
+	mux.HandleFunc("/api/logs", telemetryHandler(shuffler, telemetry, target)) // Phase 6 requirement
+	mux.HandleFunc("/api/domains", domainsHandler(telemetry))                  // Multi-Tenant Workspace Switcher
+	mux.HandleFunc("/api/nechat", nechatHandler(telemetry))                    // Phase 6 Nechat Assist
+	mux.HandleFunc("/api/panic", panicHandler(shuffler, telemetry))            // Phase 6 Rescue Protocol
+	mux.HandleFunc("/api/verify-session", gateway.VerifySessionHandler)        // CGNAT Bypass Challenge Validator
+	mux.Handle("/", gatewayHandler)                                            // all other requests go to the proxy
 
 	port := ":8080"
 	fmt.Printf("[NEXUS] Gateway Active on port %s -> Proxying to %s\n", port, target)

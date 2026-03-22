@@ -30,21 +30,37 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - AI_PROVIDER_URL=${AI_PROVIDER_URL}
       - AI_PROVIDER_KEY=${AI_PROVIDER_KEY}
+      - NEXUS_SESSION_SECRET=${NEXUS_SESSION_SECRET:-super-secret-matrix-key-2026}
+    cap_add:
+      - NET_ADMIN
+    env_file:
+      - .env
     depends_on:
       redis:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: always
 
-  # Next.js Command Center SOC
+  # Next.js Command Center SOC (MTD Matrix v7.0)
   dashboard:
     build:
       context: ./nexus-admin-dashboard
       dockerfile: Dockerfile
+      target: deps # Stop at deps stage to keep node_modules ready
     container_name: nexus_dashboard
     ports:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8080/api
+      - NODE_ENV=development # Force dev mode for HMR
+    env_file:
+      - .env
+    volumes:
+      - ./nexus-admin-dashboard:/app
+      - /app/node_modules # Persistent node_modules in container
+      - /app/.next # Persistent next build artifacts
+    command: npm run dev
     depends_on:
       - gateway
     restart: always

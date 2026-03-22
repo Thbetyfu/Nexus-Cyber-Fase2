@@ -1,0 +1,1 @@
+invalid response from OpenRouter: {"error":{"message":"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 5285. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account","code":402,"metadata":{"provider_name":null}},"user_id":"user_3BBmdDFq3f5424gwQDryxuGUWzY"}

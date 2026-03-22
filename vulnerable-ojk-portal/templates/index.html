@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Data Terpadu OJK (Mockup)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .ojk-blue { background-color: #0c1b41; }
+        .ojk-gold { color: #d4af37; border-color: #d4af37; }
+        .ojk-gold-bg { background-color: #d4af37; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Navbar -->
+    <nav class="ojk-blue p-4 shadow-lg border-b-4 border-[#d4af37]">
+        <div class="max-w-7xl mx-auto flex justify-between items-center text-white">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center">
+                    <span class="text-[#0c1b41] font-bold text-xl">O</span>
+                </div>
+                <span class="text-xl font-bold tracking-tight">OJK <span class="text-[#d4af37]">PORTAL</span></span>
+            </div>
+            <div class="hidden md:flex gap-6 text-sm font-medium">
+                <a href="#" class="hover:text-[#d4af37] transition-colors">BERANDA</a>
+                <a href="#" class="hover:text-[#d4af37] transition-colors">DATA KEUANGAN</a>
+                <a href="#" class="hover:text-[#d4af37] transition-colors">REGULASI</a>
+                <a href="#" class="hover:text-[#d4af37] transition-colors">HUBUNGI KAMI</a>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded border border-emerald-500/50 font-bold tracking-widest">GATEWAY_ENFORCED</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto p-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Welcome Column -->
+            <div class="lg:col-span-2">
+                <div class="bg-white p-8 rounded-2xl shadow-xl border border-slate-200">
+                    <h1 class="text-3xl font-extrabold text-[#0c1b41] mb-4">Sistem Data Keuangan Nasional v2.4</h1>
+                    <p class="text-slate-600 mb-6 leading-relaxed">
+                        Data ini disajikan secara publik sebagai transparansi kinerja perbankan dan pasar modal nasional. 
+                        Gateway pengamanan sedang dalam mode monitoring aktif.
+                    </p>
+                    
+                    <div class="bg-slate-50 p-6 rounded-xl border border-slate-100 flex gap-6">
+                        <div class="space-y-1">
+                            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest">Indeks Harga Saham</p>
+                            <p class="text-2xl font-black text-emerald-600">7.234,51 <span class="text-sm font-bold ml-1">+0.12%</span></p>
+                        </div>
+                        <div class="border-l border-slate-200 pl-6 space-y-1">
+                            <p class="text-xs text-slate-400 font-bold uppercase tracking-widest">Kurs USD/IDR</p>
+                            <p class="text-2xl font-black text-[#0c1b41]">15.421,00 <span class="text-sm font-bold text-red-500 ml-1">-0.05%</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Investor Table -->
+                <div class="mt-8 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+                    <div class="ojk-blue p-4 text-[#d4af37] font-bold text-sm tracking-widest">
+                        DATA INVESTOR TERKINI (SAMPEL)
+                    </div>
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 text-slate-400 uppercase font-black text-[10px] tracking-widest border-b">
+                            <tr>
+                                <th class="p-4">NAMA LENGKAP</th>
+                                <th class="p-4">SALDO PORTOFOLIO</th>
+                                <th class="p-4">STATUS VERIFIKASI</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y text-slate-700">
+                            <tr>
+                                <td class="p-4 font-bold">Budi Santoso</td>
+                                <td class="p-4">Rp 5.234.000</td>
+                                <td class="p-4 text-emerald-600 font-bold italic">Terverifikasi</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-bold">Siti Aisyah</td>
+                                <td class="p-4">Rp 12.500.000</td>
+                                <td class="p-4 text-emerald-600 font-bold italic">Terverifikasi</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-xl border border-slate-200">
+                    <h3 class="font-bold text-[#0c1b41] mb-3">PANEL ADMIN</h3>
+                    <p class="text-xs text-slate-500 mb-4 italic">Sistem ini rentan terhadap override perintah internal jika tidak melalui Gateway.</p>
+                    <button class="w-full ojk-blue text-white py-3 rounded-xl font-bold hover:bg-[#1a2d5a] transition-all shadow-lg active:scale-95">
+                        LOGIN SISTEM
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // POLLING: Cek status defacement setiap 1 detik
+        setInterval(async () => {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                if (data.is_defaced) {
+                    // Refresh halaman untuk menampilkan UI Hacked
+                    window.location.reload();
+                }
+            } catch (err) {
+                console.error("Polling Error:", err);
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

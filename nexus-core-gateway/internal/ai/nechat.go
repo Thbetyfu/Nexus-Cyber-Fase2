@@ -61,7 +61,8 @@ func (n *NechatClient) Chat(logs []logger.TelemetryLog, query string) (string, e
 	userPrompt := fmt.Sprintf("=== RECENT SOC LOGS ===\n%s\n\n=== USER QUERY ===\n%s", logsContext, query)
 
 	reqBody, _ := json.Marshal(map[string]interface{}{
-		"model": n.Model,
+		"model":      n.Model,
+		"max_tokens": 1024,
 		"messages": []map[string]string{
 			{"role": "system", "content": systemPrompt},
 			{"role": "user", "content": userPrompt},

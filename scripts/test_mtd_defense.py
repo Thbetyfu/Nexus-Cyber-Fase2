@@ -47,7 +47,7 @@ def test_per_ip_rate_limit():
 
     def fire_single(idx):
         try:
-            r = requests.get(f"{BASE_URL}/get?q=ratelimit_test_{idx}", timeout=3)
+            r = requests.get(f"{BASE_URL}/api/status?q=ratelimit_test_{idx}", timeout=3)
             with lock:
                 if r.status_code == 429:
                     throttled.append(idx)
@@ -95,7 +95,7 @@ def test_honeypot_routing_trap():
 
     for label, payload in payloads:
         try:
-            r = requests.get(f"{BASE_URL}/get", params={"q": payload}, timeout=15)
+            r = requests.get(f"{BASE_URL}/api/status", params={"q": payload}, timeout=15)
             # Key: attacker gets HTTP 200 (NOT 403) — seamless honeypot illusion
             is_200 = r.status_code == 200
             is_403 = r.status_code == 403
@@ -166,7 +166,7 @@ def test_shuffler_rotation():
     print("  [i] Sending baseline request...")
 
     try:
-        r1 = requests.get(f"{BASE_URL}/get?q=mtd_baseline", timeout=5)
+        r1 = requests.get(f"{BASE_URL}/api/status?q=mtd_baseline", timeout=5)
         t1 = time.time()
         check("Baseline request succeeds", r1.status_code in [200, 429],
               f"HTTP {r1.status_code}")
@@ -207,7 +207,7 @@ def test_graceful_handoff():
     def continuous_traffic():
         while not stop_flag["stop"]:
             try:
-                r = requests.get(f"{BASE_URL}/get?q=graceful_handoff_probe", timeout=4)
+                r = requests.get(f"{BASE_URL}/api/status?q=graceful_handoff_probe", timeout=4)
                 with lock:
                     served.append(r.status_code)
             except requests.exceptions.ConnectionError:

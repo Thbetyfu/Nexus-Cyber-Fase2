@@ -29,8 +29,14 @@ func NewReflexFilter() *ReflexFilter {
 		regexp.MustCompile(`(?i)alert\(`),
 	}
 
+	// Heuristics for System Override / Defacement attempts
+	overrideRegex := []*regexp.Regexp{
+		regexp.MustCompile(`(?i)"command"\s*:\s*"deface"`),
+		regexp.MustCompile(`(?i)system/override`),
+	}
+
 	return &ReflexFilter{
-		sqliPatterns: sqliRegex,
+		sqliPatterns: append(sqliRegex, overrideRegex...),
 		xssPatterns:  xssRegex,
 	}
 }

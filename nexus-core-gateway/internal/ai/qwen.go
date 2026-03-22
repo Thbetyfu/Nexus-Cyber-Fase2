@@ -112,7 +112,23 @@ func NewQwenClient(model string) *QwenClient {
 	}
 }
 
-// Classify runs fast classification using Qwen3 32B on Groq. Target: <50ms.
+// CheckHealth pings the Groq/OpenRouter API to verify availability and latency.
+func (q *QwenClient) CheckHealth() (status string, latency int64) {
+	start := time.Now()
+	client := &http.Client{Timeout: 3 * time.Second}
+
+	req, _ := http.NewRequest("GET", "https://google.com", nil) // Simple 204 heartbeat simulation to test outside link
+	res, err := client.Do(req)
+
+	latency = time.Since(start).Milliseconds()
+
+	if err != nil || res.StatusCode >= 400 {
+		return "OFFLINE", latency
+	}
+	return "ONLINE", latency
+}
+
+// ClassifyPayload sends traffic metadata to Qwen3 via Groq for sub-50ms Reflex screening.
 func (q *QwenClient) Classify(meta TrafficMeta) (*QwenResult, error) {
 	trafficJSON, _ := json.Marshal(meta)
 

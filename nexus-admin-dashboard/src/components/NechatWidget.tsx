@@ -9,6 +9,10 @@ interface Message {
     sender: "user" | "nechat";
 }
 
+interface NechatWidgetProps {
+    activeDomain: string;
+}
+
 // Simple Markdown parser for basic **bold** and `code` formatting
 const parseMarkdown = (text: string) => {
     // Bold
@@ -20,7 +24,7 @@ const parseMarkdown = (text: string) => {
     return <span dangerouslySetInnerHTML={{ __html: parsed }} />;
 };
 
-export default function NechatWidget() {
+export default function NechatWidget({ activeDomain }: NechatWidgetProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [isMinimized, setIsMinimized] = useState(false);
     const [messages, setMessages] = useState<Message[]>([
@@ -50,7 +54,7 @@ export default function NechatWidget() {
             const res = await fetch("http://localhost:8080/api/nechat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ query })
+                body: JSON.stringify({ query, domain: activeDomain })
             });
 
             if (!res.ok) throw new Error("API Offline or CORS error");
@@ -115,8 +119,8 @@ export default function NechatWidget() {
                         {messages.map((msg) => (
                             <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${msg.sender === 'user'
-                                        ? 'bg-blue-600/20 border border-blue-500/30 text-blue-100 rounded-br-sm'
-                                        : 'bg-gray-800/40 border border-gray-700/50 text-gray-300 rounded-bl-sm'
+                                    ? 'bg-blue-600/20 border border-blue-500/30 text-blue-100 rounded-br-sm'
+                                    : 'bg-gray-800/40 border border-gray-700/50 text-gray-300 rounded-bl-sm'
                                     }`}>
                                     {msg.sender === 'nechat' ? parseMarkdown(msg.text) : msg.text}
                                 </div>
