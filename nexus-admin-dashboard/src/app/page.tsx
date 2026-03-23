@@ -226,6 +226,87 @@ const SOCDashboard = () => {
             onAddClick={() => setIsModalOpen(true)}
           />
 
+          {/* [NEW: EXECUTIVE REPORTING] Professional PDF Intelligence Report Engine */}
+          <button
+            onClick={async () => {
+              const btn = document.getElementById('btn-report') as HTMLButtonElement;
+              if (btn) {
+                // [PRE-IGNITION] Open the window IMMEDIATELY to bypass Pop-up Blocker
+                const printWindow = window.open('', '_blank');
+                if (!printWindow) {
+                  alert("⚠️ POP-UP BLOCKED! Harap izinkan pop-up untuk dashboard ini agar laporan PDF dapat diunduh.");
+                  return;
+                }
+
+                // Initial UI for the loading state
+                printWindow.document.write('<html><body style="background:#0c0e12;color:#3b82f6;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;"><div><h1>NEXUS CORTEX: Synthesizing Intelligence...</h1><p style="color:#64748b;text-align:center;">Please wait while we aggregate security metrics...</p></div></body></html>');
+
+                btn.disabled = true;
+                btn.innerText = "📄 Synthesizing PDF intelligence...";
+
+                try {
+                  const res = await fetch(`http://localhost:8080/api/report/generate?domain=${activeDomain}`);
+                  const data = await res.json();
+
+                  if (data.status === 'success') {
+                    const reportHtml = `
+                        <html>
+                          <head>
+                            <title>Nexus_Incident_Report_${activeDomain}</title>
+                            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+                            <style>
+                              body { font-family: 'Inter', sans-serif; padding: 50px; color: #1e293b; line-height: 1.6; background: white; }
+                              .header { border-bottom: 3px solid #3b82f6; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end; }
+                              .logo { font-weight: 800; font-size: 24px; color: #1d4ed8; letter-spacing: -1px; }
+                              .meta { text-align: right; color: #64748b; font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+                              h1, h2, h3 { color: #0f172a; margin-top: 1.5em; border-left: 4px solid #3b82f6; padding-left: 15px; }
+                              table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+                              th { background: #f8fafc; text-align: left; padding: 12px; border: 1px solid #e2e8f0; font-weight: 700; }
+                              td { padding: 12px; border: 1px solid #e2e8f0; }
+                              .footer { margin-top: 50px; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px; text-align: center; }
+                              @media print { .no-print { display: none; } }
+                            </style>
+                          </head>
+                          <body>
+                            <div class="header">
+                              <div class="logo">NEXUS CYBER COMMAND CENTER</div>
+                              <div class="meta">
+                                DOC_ID: ${activeDomain.toUpperCase()}_SOC_${new Date().getTime()}<br>
+                                TIMESTAMP: ${new Date().toLocaleString()}
+                              </div>
+                            </div>
+                            <div id="content"></div>
+                            <div class="footer">CONFIDENTIAL - FOR AUTHORIZED EYES ONLY - NEXUS CYBER INTELLIGENCE UNIT</div>
+                            <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+                            <script>
+                              document.getElementById('content').innerHTML = marked.parse(\`${data.report_content.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`);
+                              window.onload = () => { setTimeout(() => { window.print(); }, 800); };
+                            </script>
+                          </body>
+                        </html>
+                    `;
+                    printWindow.document.open();
+                    printWindow.document.write(reportHtml);
+                    printWindow.document.close();
+                  } else {
+                    printWindow.close();
+                  }
+                } catch (e) {
+                  console.error("PDF Synthesis Failed", e);
+                  printWindow.close();
+                  alert("Gagal melakukan sintesis laporan. Pastikan Gateway (8080) menyala.");
+                } finally {
+                  btn.disabled = false;
+                  btn.innerText = "📄 Generate AI Report";
+                }
+              }
+            }}
+            id="btn-report"
+            className="flex items-center gap-2 bg-blue-600/10 border border-blue-500/30 hover:bg-blue-600/20 text-blue-400 px-3 py-1.5 rounded text-[11px] font-bold transition-all"
+          >
+            📄 Generate AI Report
+          </button>
+
           <div className="flex items-center gap-4">
             <div className="relative group">
               <button

@@ -14,13 +14,26 @@ export default function DomainSwitcher({ activeDomain, onDomainChange, onAddClic
     const [domains, setDomains] = useState<string[]>(['all']);
 
     const fetchDomains = async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+
         try {
-            const res = await fetch('http://localhost:8080/api/domains');
-            const data = await res.json();
-            // Ensure 'all' is always at the top
-            setDomains(['all', ...data.filter((d: string) => d !== 'all')]);
+            const res = await fetch('http://localhost:8080/api/domains', {
+                signal: controller.signal,
+                mode: 'cors',
+                credentials: 'omit'
+            });
+            clearTimeout(timeoutId);
+
+            if (res.ok) {
+                const data = await res.json();
+                const fetchedDomains = data?.domains || (Array.isArray(data) ? data : []);
+                if (fetchedDomains.length > 0) {
+                    setDomains(['all', ...fetchedDomains.filter((d: string) => d !== 'all')]);
+                }
+            }
         } catch (err) {
-            console.error("Failed to fetch domains:", err);
+            // [TOTAL_SILENCE] Silencing all network errors during gateway restarts
         }
     };
 

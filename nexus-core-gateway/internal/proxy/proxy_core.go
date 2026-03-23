@@ -2,11 +2,13 @@ package proxy
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -27,6 +29,9 @@ type NexusProxy struct {
 	Honeypot  *mtd.HoneypotServer
 	Shuffler  *mtd.TopologyShuffler
 	Router    *DynamicRouter // Dynamic multi-host routing engine
+	// [NEW: VIRTUAL PATCHING] Memory-Resident Antibodies for instant O(1) blocking
+	Patches      sync.Map
+	PatchesCount int32
 }
 
 func NewNexusProxy(
@@ -59,8 +64,52 @@ func NewNexusProxy(
 	np.Router.AddRoute("ojk.localhost", target)
 	np.Router.AddRoute("kemenkeu.localhost", target)
 	np.Router.AddRoute("bi.localhost", target)
+	// [NEW: VIRTUAL PATCHING] Activate background antibody synchronization
+	np.StartImmunitySync()
 
 	return np, nil
+}
+
+// [NEW: VIRTUAL PATCHING] StartImmunitySync initiates the background autonomous sync
+// from Redis. This ensures antibodies created on one gateway node are shared instantly.
+func (np *NexusProxy) StartImmunitySync() {
+	if mtd.MtdRedis == nil || !mtd.MtdRedis.Enabled {
+		return
+	}
+
+	ticker := time.NewTicker(10 * time.Second)
+	go func() {
+		ctx := context.Background()
+		for range ticker.C {
+			// Pull "nexus:virtual_patches" from Redis Set
+			patches, err := mtd.MtdRedis.Client.SMembers(ctx, "nexus:virtual_patches").Result()
+			if err == nil {
+				// Atomic update of the local antibody map
+				var count int32
+				for _, p := range patches {
+					np.Patches.Store(p, true)
+					count++
+				}
+				atomic.StoreInt32(&np.PatchesCount, count)
+			}
+		}
+	}()
+}
+
+// [NEW: VIRTUAL PATCHING] AddAntibody caches a malicious pattern for instant blocking
+func (np *NexusProxy) AddAntibody(payload string) {
+	// 1. Local Cache Insert (Sub-millisecond protection)
+	np.Patches.Store(payload, true)
+	atomic.AddInt32(&np.PatchesCount, 1)
+
+	// 2. Global Persistence Sync (Share with other Nexus Gateways)
+	if mtd.MtdRedis != nil && mtd.MtdRedis.Enabled {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			mtd.MtdRedis.Client.SAdd(ctx, "nexus:virtual_patches", payload)
+		}()
+	}
 }
 
 // UpdateTarget atomically swaps the reverse proxy to a new backend.

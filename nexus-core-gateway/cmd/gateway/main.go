@@ -130,16 +130,17 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/routes", routesHandler(gateway.Router)) // Zero-Code Onboarding
 	mux.HandleFunc("/api/telemetry", telemetryHandler(shuffler, telemetry, target))
-	mux.HandleFunc("/api/ai-events", aiEventsHandler(telemetry))               // AI Cognitive Core Tracker
-	mux.HandleFunc("/api/ai/stream", aiStreamHandler())                        // SSE for Live CLI
-	mux.HandleFunc("/api/ai/status", aiStatusHandler())                        // Health Check
-	mux.HandleFunc("/api/cli/execute", cliExecuteHandler(telemetry))           // Interactive Terminal CLI
-	mux.HandleFunc("/api/logs", telemetryHandler(shuffler, telemetry, target)) // Phase 6 requirement
-	mux.HandleFunc("/api/domains", domainsHandler(telemetry))                  // Multi-Tenant Workspace Switcher
-	mux.HandleFunc("/api/nechat", nechatHandler(telemetry))                    // Phase 6 Nechat Assist
-	mux.HandleFunc("/api/panic", panicHandler(shuffler, telemetry))            // Phase 6 Rescue Protocol
-	mux.HandleFunc("/api/verify-session", gateway.VerifySessionHandler)        // CGNAT Bypass Challenge Validator
-	mux.Handle("/", gatewayHandler)                                            // all other requests go to the proxy
+	mux.HandleFunc("/api/ai-events", aiEventsHandler(telemetry))                               // AI Cognitive Core Tracker
+	mux.HandleFunc("/api/ai/stream", aiStreamHandler())                                        // SSE for Live CLI
+	mux.HandleFunc("/api/ai/status", aiStatusHandler())                                        // Health Check
+	mux.HandleFunc("/api/cli/execute", cliExecuteHandler(telemetry, shuffler, gateway.Router)) // Interactive Terminal CLI
+	mux.HandleFunc("/api/logs", telemetryHandler(shuffler, telemetry, target))                 // Phase 6 requirement
+	mux.HandleFunc("/api/domains", domainsHandler(telemetry))                                  // Multi-Tenant Workspace Switcher
+	mux.HandleFunc("/api/nechat", nechatHandler(telemetry))                                    // Phase 6 Nechat Assist
+	mux.HandleFunc("/api/panic", panicHandler(shuffler, telemetry))                            // Phase 6 Rescue Protocol
+	mux.HandleFunc("/api/report/generate", reportGenerateHandler(telemetry))                   // [NEW: EXECUTIVE REPORTING]
+	mux.HandleFunc("/api/verify-session", gateway.VerifySessionHandler)                        // CGNAT Bypass Challenge Validator
+	mux.Handle("/", gatewayHandler)                                                            // all other requests go to the proxy
 
 	// 9. Root Matrix Shield: Wrap EVERYTHING in AI Intelligence
 	// 3. CORS Shield (Access for Dashboard)

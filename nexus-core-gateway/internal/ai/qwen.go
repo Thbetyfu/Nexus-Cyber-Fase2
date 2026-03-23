@@ -102,7 +102,7 @@ func NewQwenClient(model string) *QwenClient {
 	if envModel != "" {
 		model = envModel
 	} else if model == "" {
-		model = "qwen/qwen3-32b-instruct"
+		model = "qwen/qwen-2.5-72b-instruct"
 	}
 
 	return &QwenClient{
@@ -150,6 +150,7 @@ func (q *QwenClient) Classify(meta TrafficMeta) (*QwenResult, error) {
 	req.Header.Set("Authorization", "Bearer "+q.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("HTTP-Referer", "https://nexus-cyber.go.id")
+	req.Header.Set("X-Title", "Nexus Cyber SOC Gateway")
 
 	// OpenRouter has slightly more routing latency than Groq natively.
 	// Adjusted budget to 1500ms to allow valid AI inferences without dropping.
@@ -168,6 +169,43 @@ func (q *QwenClient) Classify(meta TrafficMeta) (*QwenResult, error) {
 
 	rawContent := gResp.Choices[0].Message.Content
 	return ParseQwenResponse(rawContent)
+}
+
+// [NEW: EXECUTIVE REPORTING] Generate performs a standard chat completion for summaries
+func (q *QwenClient) Generate(prompt string) (string, int64, error) {
+	start := time.Now()
+	payload, _ := json.Marshal(groqRequest{
+		Model: q.Model,
+		Messages: []groqMessage{
+			{Role: "system", Content: "You are a professional Cyber Security Analyst."},
+			{Role: "user", Content: prompt},
+		},
+	})
+
+	req, err := http.NewRequest("POST", q.Endpoint, bytes.NewBuffer(payload))
+	if err != nil {
+		return "", 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+q.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("HTTP-Referer", "https://nexus-cyber.go.id")
+	req.Header.Set("X-Title", "Nexus Cyber SOC Gateway")
+
+	client := &http.Client{Timeout: 10 * time.Second} // Longer timeout for deep generation
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", 0, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var gResp groqResponse
+	if err := json.Unmarshal(body, &gResp); err != nil || len(gResp.Choices) == 0 {
+		return "", 0, fmt.Errorf("ai_gen_parse_error: %s", string(body))
+	}
+
+	latency := time.Since(start).Milliseconds()
+	return gResp.Choices[0].Message.Content, latency, nil
 }
 
 // ParseQwenResponse uses the 3-stage robust JSON parser for QwenResult.

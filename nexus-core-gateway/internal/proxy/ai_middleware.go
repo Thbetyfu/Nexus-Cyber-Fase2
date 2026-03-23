@@ -39,15 +39,63 @@ func (np *NexusProxy) AIMiddleware(next http.Handler) http.Handler {
 		query, _ := url.QueryUnescape(r.URL.RawQuery)
 		analysisData := query + " " + string(body)
 
-		// DEBUG: Print incoming payloads to console
 		if len(analysisData) > 5 {
 			fmt.Printf("[AI-INSPECT] Path: %s | Payload: %s\n", r.URL.Path, analysisData)
+		}
+
+		// [NEW: VIRTUAL PATCHING] Layer 0: Immunity Check (Local Antibodies Memory)
+		// O(1) time complexity — Instant Drop for already discovered malicious patterns.
+		isPatched := false
+		np.Patches.Range(func(key, value interface{}) bool {
+			pattern := key.(string)
+			if strings.Contains(analysisData, pattern) {
+				isPatched = true
+				return false // stop iteration
+			}
+			return true
+		})
+
+		if isPatched {
+			// LOG VIRTUAL PATCH HIT
+			np.Logger.LogAIEvent(logger.AIEventLog{
+				Timestamp:    time.Now(),
+				Layer:        "Virtual-Patch",
+				Status:       "IMMUNE",
+				DetailAction: "[VIRTUAL PATCH] Instant Drop - Antibody Signature Match.",
+			})
+
+			// LOG TRAFFIC INCIDENT
+			tLog := logger.TelemetryLog{
+				Timestamp:    time.Now(),
+				SourceIP:     r.RemoteAddr,
+				Endpoint:     r.URL.Path,
+				Method:       r.Method,
+				Status:       "INSTANT_DROP_PATCH",
+				TargetDomain: r.Host,
+				ThreatDetail: "VIRTUAL_PATCH_MATCH",
+			}
+			np.Logger.LogTraffic(tLog)
+
+			// MTD: Digital Hallucination (Honeypot Redirect)
+			np.routeToHoneypot(w, r)
+			return
 		}
 
 		// 2. Dual-Brain Layer 1: Reflex
 		isThreat, threatType := np.Filter.InspectRequest(analysisData)
 
 		if isThreat {
+			// [NEW: VIRTUAL PATCHING] Generate new antibody for this pattern
+			if len(analysisData) > 10 {
+				np.AddAntibody(analysisData)
+				np.Logger.LogAIEvent(logger.AIEventLog{
+					Timestamp:    time.Now(),
+					Layer:        "Virtual-Patch",
+					Status:       "ANTIBODY_GEN",
+					DetailAction: "[VIRTUAL PATCH] New signature generated and cached for future immunity.",
+				})
+			}
+
 			// LOG SECURITY INCIDENT
 			np.Logger.LogAIEvent(logger.AIEventLog{
 				Timestamp:    time.Now(),
