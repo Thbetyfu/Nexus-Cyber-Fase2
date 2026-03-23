@@ -21,13 +21,26 @@ func BrowserIntegrityCheck(next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 1. Skip challenge for API/Telemetry and Honeypot
+		// 1. Matrix Skip: Allow SOC Dashboard and verify-session APIs
+		/*
+		   NEXUS_FIX_LOG: [LAYER_0_WHITELIST_GUARD]
+		   - Kenapa ini ada? SOC Dashboard (3000) harus bisa tarik data tanpa JS Challenge (403).
+		   - Jika dihapus: Dashboard akan hampa (0 0 0) karena data tertahan di gerbang integritas.
+		*/
 		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api/verify-session" {
 			next.ServeHTTP(w, r)
 			return
 		}
 
 		// 2. Validate nexus_session cookie
+		// WHITELIST: Allow diagnostic APIs to bypass JS Challenge for Dashboard Sync
+		if strings.HasPrefix(r.URL.Path, "/api/telemetry") ||
+			strings.HasPrefix(r.URL.Path, "/api/ai-events") ||
+			strings.HasPrefix(r.URL.Path, "/api/logs") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		cookie, err := r.Cookie("nexus_session")
 		if err == nil {
 			if isValidSession(cookie.Value, secret) {

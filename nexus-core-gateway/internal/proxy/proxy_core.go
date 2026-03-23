@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strings"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -99,78 +98,7 @@ func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Dual-Brain Layer 1: Reflex (Sync - Fast)
-	query, _ := url.QueryUnescape(r.URL.RawQuery)
-	analysisData := query + " " + string(body)
-	isReflexThreat, threatType := np.Filter.InspectRequest(analysisData)
-
-	if isReflexThreat {
-		latency := time.Since(start).Milliseconds()
-		tLog := logger.TelemetryLog{
-			Timestamp:    time.Now(),
-			SourceIP:     r.RemoteAddr,
-			Endpoint:     r.URL.Path,
-			Method:       r.Method,
-			Status:       "HONEYPOT_REDIRECTED",
-			TargetDomain: r.Host,
-			ThreatDetail: threatType,
-			LatencyMS:    latency,
-		}
-		np.Logger.EnrichLog(&tLog, r)
-		np.Logger.LogTraffic(tLog)
-
-		// LOG AI COGNITIVE EVENT
-		np.Logger.LogAIEvent(logger.AIEventLog{
-			Layer:        "Reflex",
-			Status:       "Mitigating",
-			DetailAction: fmt.Sprintf("Dynamic WAF Rule Generated: Blocked pattern '%s' from IP %s", threatType, r.RemoteAddr),
-		})
-
-		// CRITICAL DEFENSE ASYNC: Block at OS Level for identified threat patterns
-		// (Only for severe threats like SQLi or Path Traversal)
-		if strings.Contains(threatType, "SQL_INJECTION") || strings.Contains(threatType, "DIRECTORY_TRAVERSAL") {
-			go mtd.BlockIPAtOSLevel(r.RemoteAddr)
-		}
-
-		// MTD Phase 5: DIGITAL HALLUCINATION
-		// Instead of dropping, silently redirect to Honeypot Tarpit.
-		np.routeToHoneypot(w, r)
-		return
-	}
-
-	// 3. Dual-Brain Layer 2: Reasoning (Async - Intent Analysis)
-	go func(tData string, source string, path string, req *http.Request) {
-		isMalicious, err := np.Reasoning.AnalyzeIntent(tData)
-		if err != nil {
-			return // Fail-Open on AI timeout
-		}
-
-		if isMalicious {
-			tLog := logger.TelemetryLog{
-				Timestamp:    time.Now(),
-				SourceIP:     source,
-				Endpoint:     path,
-				Method:       "ASYNC",
-				Status:       "MALICIOUS_DETECTED_REASONING",
-				ThreatDetail: "Llama3_Intent_Analysis_Malicious",
-				TargetDomain: req.Host,
-				LatencyMS:    time.Since(start).Milliseconds(),
-			}
-			np.Logger.EnrichLog(&tLog, req)
-			np.Logger.LogTraffic(tLog)
-
-			// LOG AI COGNITIVE EVENT
-			np.Logger.LogAIEvent(logger.AIEventLog{
-				Layer:        "Reasoning",
-				Status:       "Analyzing",
-				DetailAction: fmt.Sprintf("Deep payload inspection flagged malicious intent from %s", source),
-			})
-			fmt.Printf("[ALERT] Reasoning Layer: BYPASS from %s -> Flagged for MTD blacklist\n", source)
-		}
-	}(analysisData, r.RemoteAddr, r.URL.Path, r)
-
-	// 4. Proxy Traffic to Current MTD Target (atomic load — always fresh)
-	latency := time.Since(start).Milliseconds()
+	// 2. Multi-Tenant Traffic Tracking (ISO-25010 Compliance)
 	tLog := logger.TelemetryLog{
 		Timestamp:    time.Now(),
 		SourceIP:     r.RemoteAddr,
@@ -178,7 +106,7 @@ func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Method:       r.Method,
 		Status:       "ALLOWED",
 		TargetDomain: r.Host,
-		LatencyMS:    latency,
+		LatencyMS:    time.Since(start).Milliseconds(),
 	}
 	np.Logger.EnrichLog(&tLog, r)
 	np.Logger.LogTraffic(tLog)

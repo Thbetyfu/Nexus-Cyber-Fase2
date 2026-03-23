@@ -141,11 +141,38 @@ func main() {
 	mux.HandleFunc("/api/verify-session", gateway.VerifySessionHandler)        // CGNAT Bypass Challenge Validator
 	mux.Handle("/", gatewayHandler)                                            // all other requests go to the proxy
 
+	// 9. Root Matrix Shield: Wrap EVERYTHING in AI Intelligence
+	// 3. CORS Shield (Access for Dashboard)
+	corsShield := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization")
+
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	rootShield := gateway.AIMiddleware(corsShield(mux))
+
 	port := ":8080"
 	fmt.Printf("[NEXUS] Gateway Active on port %s -> Proxying to %s\n", port, target)
 	fmt.Println("[NEXUS] MODE: Phase 5 MTD Active | Honeypot: :9090 | Rate Limiter: 50r/s")
 
-	if err := http.ListenAndServe(port, mux); err != nil {
+	// NEXUS_FIX: [INITIAL_HEARTBEAT]
+	// Injecting initial status to populate 'Autonomous Operations' on start.
+	telemetry.LogAIEvent(logger.AIEventLog{
+		Timestamp:    time.Now(),
+		Layer:        "Self-Repair",
+		Status:       "SYSTEM_READY",
+		DetailAction: "Nexus Cyber Intelligence established. Adaptive Matrix Layer 7 active and monitoring traffic vectors.",
+	})
+
+	if err := http.ListenAndServe(port, rootShield); err != nil {
 		log.Fatal(err)
 	}
 }

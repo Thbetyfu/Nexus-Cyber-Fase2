@@ -89,4 +89,23 @@ graph TD
 | **Beban Latensi Pengguna Sah** | Sering kena *False Positive* pada sintaks unik | Pemrosesan paket yang membebani | AI membedah filter dalam hitungan milidetik secara asinkron dengan _go-routines_. |
 
 ---
-*Dibangun dengan dedikasi tinggi & keamanan standar militer.*
+
+## 8. 🕹️ Nexus Cyber: Core CLI Command Guide  
+Nexus Command Center menyediakan antarmuka terminal interaktif yang terintegrasi langsung dengan **AI Cortex**. Gunakan perintah berikut di dalam widget Terminal SOC untuk kontrol penuh:
+
+| Command | Action / Deskripsi | Output Visual |
+| :--- | :--- | :--- |
+| `/help` | Menampilkan menu bantuan perintah biner yang tersedia. | ASCII Help Menu |
+| `/status` | Melakukan audit kesehatan sistem, koneksi Redis (Distributed Cache), dan latensi AI Cortex. | System Health Report |
+| `/ban [IP]` | Melakukan pemblokiran manual terhadap IP target untuk diarahkan ke Honeypot Tarpit selama 24 jam. | [SUCCESS] IP Banned |
+| `@nexus [Query]` | Melakukan interaksi kognitif dengan AI Reasoning untuk profiling ancaman secara mendalam. | **[NEXUS-AI] Thinking Mode active** |
+
+---
+
+## 9. ✨ Fitur Terbaru (March 2026 Update)
+- **AI Reasoning Mode (Cognitive Pulse):** Animasi "Berfikir" biner pada terminal untuk transparansi deduksi AI.
+- **Silent Matrix Local Mode:** Kemampuan Gateway untuk beroperasi dalam mode memori lokal tanpa gangguan spam jika Redis offline.
+- **Enhanced Viewport Freedom:** Perbaikan total pada jalur navigasi scroll dashboard untuk kemudahan monitoring log forensik yang panjang.
+
+---
+*Dibangun dengan dedikasi tinggi & keamanan standar militer (MTD Matrix v7.0).*

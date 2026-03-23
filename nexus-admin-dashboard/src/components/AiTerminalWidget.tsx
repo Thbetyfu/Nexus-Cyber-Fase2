@@ -1,5 +1,10 @@
 "use client"
 
+/* 
+   NEXUS_UX_STABILITY_COVENANT [LOCKED-BY-ANTIGRAVITY]
+   - Peraturan 1: terminalRef.scrollTop dilarang diubah menjadi scrollIntoView.
+   - Peraturan 2: Jangan pernah menambahkan autoFocus pada input terminal ini.
+*/
 import React, { useEffect, useState, useRef } from 'react';
 import { Terminal, ServerOff, Loader2 } from 'lucide-react';
 
@@ -14,12 +19,12 @@ interface AIEventLog {
 export default function AiTerminalWidget() {
     const [aiStatus, setAiStatus] = useState({ state: "INITIALIZING", latency: 0, model: "QWEN3-CORE" });
     const [stream, setStream] = useState<AIEventLog[]>([]);
-    const terminalEndRef = useRef<HTMLDivElement>(null);
+    // Auto-scroll logic (Quiet internal scroll)
+    const terminalRef = useRef<HTMLDivElement>(null);
 
-    // Auto-scroll logic
     useEffect(() => {
-        if (terminalEndRef.current) {
-            terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        if (terminalRef.current) {
+            terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
         }
     }, [stream]);
 
@@ -98,12 +103,24 @@ export default function AiTerminalWidget() {
             setInputValue("");
 
             // Optimistic UI Append
-            setStream(prev => [...prev.slice(-50), {
-                timestamp: new Date().toISOString(),
-                layer: "Admin",
-                status: "EXEC",
-                detail_action: `nexus_admin@soc:~$ ${cmd}`
-            }]);
+            setStream(prev => {
+                const updated = [...prev.slice(-50), {
+                    timestamp: new Date().toISOString(),
+                    layer: "Admin",
+                    status: "EXEC",
+                    detail_action: `nexus_admin@soc:~$ ${cmd}`
+                }];
+
+                if (cmd.startsWith('@nexus')) {
+                    updated.push({
+                        timestamp: new Date().toISOString(),
+                        layer: "Reasoning",
+                        status: "THINKING",
+                        detail_action: "[NEXUS-AI] Analysing cosmic threat vectors and forensic data..."
+                    });
+                }
+                return updated;
+            });
 
             try {
                 const res = await fetch('http://localhost:8080/api/cli/execute', {
@@ -114,27 +131,48 @@ export default function AiTerminalWidget() {
 
                 if (res.ok) {
                     const data = await res.json();
-                    setStream(prev => [...prev.slice(-50), {
-                        timestamp: new Date().toISOString(),
-                        layer: "System",
-                        status: "OK",
-                        detail_action: data.response
-                    }]);
+                    setStream(prev => {
+                        const next = [...prev];
+                        // Find the last "THINKING" message and replace it
+                        for (let i = next.length - 1; i >= 0; i--) {
+                            if (next[i].status === "THINKING") {
+                                next[i] = {
+                                    ...next[i],
+                                    status: "OK",
+                                    detail_action: data.response
+                                };
+                                return next;
+                            }
+                        }
+                        // Fallback: Just append if no thinking message found
+                        return [...next.slice(-50), {
+                            timestamp: new Date().toISOString(),
+                            layer: "System",
+                            status: "OK",
+                            detail_action: data.response
+                        }];
+                    });
                 } else {
-                    setStream(prev => [...prev.slice(-50), {
+                    setStream(prev => {
+                        const next = prev.filter(item => item.status !== 'THINKING');
+                        return [...next.slice(-50), {
+                            timestamp: new Date().toISOString(),
+                            layer: "System",
+                            status: "ERROR",
+                            detail_action: "[ERROR] Command routing failed."
+                        }];
+                    });
+                }
+            } catch (err) {
+                setStream(prev => {
+                    const next = prev.filter(item => item.status !== 'THINKING');
+                    return [...next.slice(-50), {
                         timestamp: new Date().toISOString(),
                         layer: "System",
                         status: "ERROR",
-                        detail_action: "[ERROR] Command routing failed."
-                    }]);
-                }
-            } catch (err) {
-                setStream(prev => [...prev.slice(-50), {
-                    timestamp: new Date().toISOString(),
-                    layer: "System",
-                    status: "ERROR",
-                    detail_action: "[ERROR] Execution offline."
-                }]);
+                        detail_action: "[ERROR] Execution offline."
+                    }];
+                });
             }
         }
     };
@@ -168,7 +206,7 @@ export default function AiTerminalWidget() {
                     )}
                 </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-black font-mono">
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-black font-mono" ref={terminalRef}>
                 <div className="flex flex-col gap-1 w-full text-[11px] leading-relaxed">
                     <div className="text-cyan-600 mb-2 whitespace-pre font-black leading-none tracking-tighter">
                         {`N EX US   C O R E   O S   v7.0`}
@@ -178,10 +216,11 @@ export default function AiTerminalWidget() {
                     {stream.map((log, index) => (
                         <div key={index} className="flex">
                             <span className={`w-full whitespace-pre-wrap break-words ${log.status === 'ERROR' ? 'text-red-500' :
-                                log.layer === 'Self-Repair' ? 'text-emerald-400 font-bold' :
-                                    log.layer === 'Reasoning' ? 'text-fuchsia-400' :
-                                        log.layer === 'Admin' ? 'text-blue-400 font-bold' :
-                                            'text-green-400'
+                                    log.status === 'THINKING' ? 'text-fuchsia-400 animate-pulse font-bold' :
+                                        log.layer === 'Self-Repair' ? 'text-emerald-400 font-bold' :
+                                            log.layer === 'Reasoning' ? 'text-fuchsia-400' :
+                                                log.layer === 'Admin' ? 'text-blue-400 font-bold' :
+                                                    'text-green-400'
                                 }`}>
                                 {log.detail_action}
                             </span>
@@ -202,7 +241,6 @@ export default function AiTerminalWidget() {
                         />
                     </div>
 
-                    <div ref={terminalEndRef} />
                 </div>
             </div>
         </div>

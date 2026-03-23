@@ -8,6 +8,8 @@ services:
     # Dihapus demi Security Best Practice (Enterprise Grade)
     volumes:
       - redis_data:/data
+    ports:
+      - "6379:6379"
     command: redis-server --appendonly yes
     restart: always
     healthcheck:

@@ -30,18 +30,14 @@ type TelemetryResponse struct {
 	} `json:"stats"`
 }
 
-// telemetryHandler serves live MTD and traffic stats to the internal dashboard.
 func telemetryHandler(shuffler *mtd.TopologyShuffler, telemetry *logger.Logger, backendTarget string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// 1. Enterpise-Grade CORS Architecture (Supporting Chrome 120+)
-		origin := r.Header.Get("Origin")
-		if origin == "" {
-			origin = "*"
-		}
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS, POST")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
-		w.Header().Set("Access-Control-Allow-Private-Network", "true") // Essential for local Matrix node
+		/*
+		   NEXUS_FIX_LOG: [DASHBOARD_DATA_STALL_PATCH]
+		   - Kenapa CORS di sini dihapus? Karena CORS sudah ditangani secara Global di main.go (corsShield).
+		   - Dilarang menambahkan header 'Access-Control-Allow-Origin' lagi di sini!
+		   - Jika ada Double Header, browser akan membuang data telemetry (Dashboard jadi 0).
+		*/
 		w.Header().Set("Content-Type", "application/json")
 
 		if r.Method == http.MethodOptions {
@@ -177,9 +173,24 @@ func aiStreamHandler() http.HandlerFunc {
 		}
 
 		if mtd.MtdRedis == nil || !mtd.MtdRedis.Enabled {
-			fmt.Fprintf(w, "data: {\"error\": \"Redis disconnected\"}\n\n")
+			// NEXUS_FIX: [LOCAL_MODE_SILENCE]
+			// Send status ONCE and stay connected to prevent reconnection spam.
+			fmt.Fprintf(w, "data: {\"timestamp\":\"%s\",\"layer\":\"Core\",\"status\":\"LOCAL-MODE\",\"detail_action\":\"[MATRIX-LOCAL-MODE] Active. System silent and monitoring.\"}\n\n", time.Now().Format(time.RFC3339))
 			flusher.Flush()
-			return
+
+			// Keep connection alive without reconnecting
+			heartbeat := time.NewTicker(20 * time.Second)
+			defer heartbeat.Stop()
+			ctx := r.Context()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-heartbeat.C:
+					fmt.Fprintf(w, ": heartbeat\n\n")
+					flusher.Flush()
+				}
+			}
 		}
 
 		ctx := r.Context()

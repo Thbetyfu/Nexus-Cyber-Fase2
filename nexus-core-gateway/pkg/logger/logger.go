@@ -197,6 +197,10 @@ func (l *Logger) LogTraffic(log TelemetryLog) {
 	if len(l.recentLogs) > 50 {
 		l.recentLogs = l.recentLogs[len(l.recentLogs)-50:]
 	}
+
+	// Console Log for Docker visibility
+	fmt.Printf("[NET-TRAFFIC] %s | %s | %s | %s -> %s | %dms\n",
+		log.Timestamp.Format("15:04:05"), log.Status, log.TargetDomain, log.SourceIP, log.Endpoint, log.LatencyMS)
 }
 
 // GetRecentLogs returns a copy of the recent logs for the API.
@@ -226,6 +230,10 @@ func (l *Logger) LogAIEvent(event AIEventLog) {
 	if len(l.recentAIEvents) > 20 {
 		l.recentAIEvents = l.recentAIEvents[len(l.recentAIEvents)-20:]
 	}
+
+	// Console Log for Docker visibility
+	fmt.Printf("[AI-COGNITION] %s | Layer: %s | Status: %s | %s\n",
+		event.Timestamp.Format("15:04:05"), event.Layer, event.Status, event.DetailAction)
 
 	// Trigger real-time broadcast if callback is set
 	if l.OnAIEvent != nil {

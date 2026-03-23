@@ -1,5 +1,10 @@
 "use client"
 
+/* 
+   NEXUS_UX_STABILITY_COVENANT [LOCKED-BY-ANTIGRAVITY]
+   - Peraturan 1: Dilarang keras menambahkan scrollIntoView() atau focus() di file ini.
+   - Peraturan 2: Dashboard harus tetap berada di tingkat tinggi viewport (100vh).
+*/
 import React, { useEffect, useState, useRef } from "react"
 import {
   Shield, Zap, Activity, ShieldAlert, Cpu, Ghost, Globe, Terminal,
@@ -39,20 +44,29 @@ export interface AIEventLog {
 }
 
 // Custom Hook for Real-Time SOC Polling (Phase 7: Multi-Tenant aware)
-function useTelemetry(url: string, intervalMs: number = 1500) {
+function useTelemetry(url: string, intervalMs: number = 2000) {
   const [logs, setLogs] = useState<TelemetryLog[]>([])
   const [history, setHistory] = useState<any[]>([])
   const [metrics, setMetrics] = useState({ allowed: 0, blocked: 0, honeypot: 0, panics: 0 })
   const [shufflerData, setShufflerData] = useState({ port: 3001, status: "OFFLINE" })
   const [isLive, setIsLive] = useState(true)
 
-  // High-Precision Refs for Delta Visualization
-  const base = useRef<{ allowed: number, honeypot: number } | null>(null)
-  const timeline = useRef<any[]>(Array.from({ length: 20 }).map((_, i) => ({ time: `-${(19 - i) * 2}s`, allowed: 0, honeypot: 0 })))
+  // 1. MATRIX CLOCK SYNC: Pre-populate timeline with real-time markers
+  const prevTrafficRef = useRef(0)
+  const prevHoneypotRef = useRef(0)
+  const isFirstFetch = useRef(true)
+  const timeline = useRef<any[]>(Array.from({ length: 40 }).map((_, i) => {
+    const time = new Date(Date.now() - (39 - i) * 2000)
+    return {
+      time: time.toLocaleTimeString("id-ID", { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      allowed: 0,
+      honeypot: 0
+    }
+  }))
 
   useEffect(() => {
-    let polling = true;
-    const poll = async () => {
+    let pollingActive = true;
+    const fetchTelemetry = async () => {
       try {
         const res = await fetch(url, {
           cache: 'no-store',
@@ -60,43 +74,48 @@ function useTelemetry(url: string, intervalMs: number = 1500) {
           headers: { 'Accept': 'application/json' }
         })
         const data = await res.json()
-        if (!polling) return
+        if (!pollingActive) return
 
         setIsLive(true)
-        // 1. Snapshot Mapping
-        setLogs((data.recent_logs || []).reverse())
         setMetrics(data.stats)
         setShufflerData(data.mtd)
+        setLogs((data.recent_logs || []).reverse())
 
-        // 2. Pulse Calculation (The "From Scratch" Chart Feed)
-        const time = new Date().toLocaleTimeString("id-ID", { hour12: false })
+        const currentTrafficTotal = data.stats.allowed || 0
+        const currentHoneypotTotal = data.stats.honeypot || 0
 
-        if (!base.current) {
-          base.current = { allowed: data.stats.allowed, honeypot: data.stats.honeypot }
-          setHistory([...timeline.current])
+        // 2. MATRIX SYNC: Initialize markers on first run to avoid fake spikes
+        if (isFirstFetch.current) {
+          prevTrafficRef.current = currentTrafficTotal
+          prevHoneypotRef.current = currentHoneypotTotal
+          isFirstFetch.current = false
           return
         }
 
-        const deltaA = Math.max(0, data.stats.allowed - base.current.allowed)
-        const deltaH = Math.max(0, data.stats.honeypot - base.current.honeypot)
+        // 3. CALCULATION: Delta Per Second (Accurate RPS)
+        const trafficRPS = Math.max(0, currentTrafficTotal - prevTrafficRef.current)
+        const honeypotRPS = Math.max(0, currentHoneypotTotal - prevHoneypotRef.current)
 
-        base.current = { allowed: data.stats.allowed, honeypot: data.stats.honeypot }
+        prevTrafficRef.current = currentTrafficTotal
+        prevHoneypotRef.current = currentHoneypotTotal
 
-        const point = { time, allowed: deltaA, honeypot: deltaH }
-        timeline.current = [...timeline.current, point].slice(-20)
+        const timeLabel = new Date().toLocaleTimeString("id-ID", { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        const point = { time: timeLabel, allowed: trafficRPS, honeypot: honeypotRPS }
+
+        timeline.current = [...timeline.current, point].slice(-40)
         setHistory([...timeline.current])
 
-      } catch (err) {
-        if (polling) {
+      } catch (error) {
+        if (pollingActive) {
           setIsLive(false)
-          console.error("[NEXUS] Matrix Connection Offline", err)
         }
       }
-    }
+    };
 
-    poll()
-    const timer = setInterval(poll, intervalMs)
-    return () => { polling = false; clearInterval(timer); }
+    fetchTelemetry()
+    const interval = setInterval(fetchTelemetry, intervalMs)
+    return () => { pollingActive = false; clearInterval(interval); }
+
   }, [url, intervalMs])
 
   return { logs, metrics, history, shufflerData, isLive }
@@ -125,8 +144,9 @@ function useAIEvents(url: string, intervalMs: number = 1000) {
 const SOCDashboard = () => {
   const [activeDomain, setActiveDomain] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [logLimit, setLogLimit] = useState<number>(10); // Default Matrix View Focus
 
-  const { logs, metrics, history, shufflerData, isLive } = useTelemetry(`http://localhost:8080/api/logs?domain=${activeDomain}`, 1500)
+  const { logs, metrics, history, shufflerData, isLive } = useTelemetry(`http://localhost:8080/api/logs?domain=${activeDomain}`, 2000)
   const aiEvents = useAIEvents('http://localhost:8080/api/ai-events', 1000)
 
   const tableContainerRef = useRef<HTMLDivElement>(null)
@@ -140,17 +160,15 @@ const SOCDashboard = () => {
     }
   }
 
+  // 1. DYNAMIC LOG SLICER: Filter entry based on user choice
+  const displayLogs = logs.slice(0, logLimit);
+
   useEffect(() => {
-    if (tableContainerRef.current) {
-      tableContainerRef.current.scrollTop = 0;
-    }
+    // Scroll removed to prevent jumping
   }, [logs])
 
   useEffect(() => {
-    // Auto-scroll the terminal thought stream
-    if (thoughtContainerRef.current) {
-      thoughtContainerRef.current.scrollTop = thoughtContainerRef.current.scrollHeight;
-    }
+    // Scroll removed to prevent jumping
   }, [aiEvents])
 
   return (
@@ -182,7 +200,7 @@ const SOCDashboard = () => {
         </div>
       )}
       {/* 🛡️ SOC HEADER */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800/80 bg-[#090b0e] shadow-md z-10 sticky top-0">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800/80 bg-[#090b0e] shadow-md z-10 sticky top-0 shrink-0">
         <div className="flex items-center gap-4">
           <div className="bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
             <Shield className="w-8 h-8 text-emerald-400" />
@@ -255,7 +273,7 @@ const SOCDashboard = () => {
       </header>
 
       {/* 🚀 MAIN CONTENT */}
-      <main className="flex-1 flex flex-col p-6 gap-6 overflow-hidden max-w-screen-2xl mx-auto w-full">
+      <main className="flex-1 flex flex-col p-6 gap-6 max-w-screen-2xl mx-auto w-full">
         <section className="grid grid-cols-1 lg:grid-cols-4 gap-6 shrink-0">
           {/* Metrics Column */}
           <div className="lg:col-span-1 flex flex-col gap-4">
@@ -289,8 +307,8 @@ const SOCDashboard = () => {
             <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-4 flex items-center gap-2">
               <Activity className="w-4 h-4 text-blue-500" /> Real-time Traffic Vectors
             </h3>
-            <div className="w-full flex-1">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="w-full flex-1 min-h-[220px]">
+              <ResponsiveContainer width="100%" height={220}>
                 <AreaChart data={history} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorSafe" x1="0" y1="0" x2="0" y2="1">
@@ -339,11 +357,11 @@ const SOCDashboard = () => {
               <span className="text-[10px] text-emerald-500/70 font-mono bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">SELF_REPAIR_LOG</span>
             </div>
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-              {aiEvents.filter(e => e.layer === 'Self-Repair' || e.status === 'Mitigating').length === 0 ? (
+              {aiEvents.filter(e => e.layer === 'Self-Repair' || e.status === 'MITIGATING' || e.status === 'Mitigating').length === 0 ? (
                 <div className="text-slate-600 font-mono text-xs flex items-center justify-center h-full">No interventions generated. System stable.</div>
               ) : (
                 <div className="flex flex-col gap-3 relative before:absolute before:inset-0 before:ml-2 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-emerald-500/20 before:to-transparent">
-                  {aiEvents.filter(e => e.layer === 'Self-Repair' || e.status === 'Mitigating').reverse().map((ev, i) => (
+                  {aiEvents.filter(e => e.layer === 'Self-Repair' || e.status === 'MITIGATING' || e.status === 'Mitigating').reverse().map((ev, i) => (
                     <div key={i} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
                       <div className="bg-emerald-500/20 border border-emerald-500/50 w-4 h-4 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.3)] shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 flex items-center justify-center relative z-10 ml-0 md:ml-auto">
                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
@@ -366,10 +384,26 @@ const SOCDashboard = () => {
         {/* LOWER SECTION: Real-Time Access & Threat Log */}
         <section className="flex-1 flex flex-col bg-[#0c0f14]/80 backdrop-blur border border-gray-800/60 rounded-xl overflow-hidden shadow-lg min-h-[400px]">
           <div className="bg-[#090b0e] px-5 py-3 border-b border-gray-800/80 flex items-center justify-between sticky top-0 z-20 shadow-sm">
-            <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wider flex items-center gap-2">
-              <Lock className="w-4 h-4 text-emerald-500" />
-              The Rogue Gallery: Access & Forensic Log
-            </h3>
+            <div className="flex items-center gap-4">
+              <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wider flex items-center gap-2">
+                <Lock className="w-4 h-4 text-emerald-500" />
+                The Rogue Gallery: Access & Forensic Log
+              </h3>
+              {/* DROPDOWN FILTER ENTRY */}
+              <div className="flex items-center gap-2 bg-black/40 border border-gray-800 rounded px-2 py-1">
+                <span className="text-[9px] text-gray-500 uppercase font-black font-mono">Entries:</span>
+                <select
+                  value={logLimit}
+                  onChange={(e) => setLogLimit(Number(e.target.value))}
+                  className="bg-transparent text-[10px] text-emerald-500 font-bold font-mono outline-none cursor-pointer"
+                >
+                  <option value={5}>5 UNIT</option>
+                  <option value={10}>10 UNIT</option>
+                  <option value={50}>50 UNIT</option>
+                  <option value={100}>100 UNIT</option>
+                </select>
+              </div>
+            </div>
             <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-1 rounded font-mono shadow-inner tracking-widest">
               🔴 LIVE STREAM
             </span>
@@ -387,7 +421,7 @@ const SOCDashboard = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800/50">
-                {logs.map((log, idx) => {
+                {displayLogs.map((log, idx) => {
                   const isHacker = log.status !== "ALLOWED";
                   const rowClass = isHacker
                     ? "hover:bg-red-950/20 transition-colors bg-red-950/10"
