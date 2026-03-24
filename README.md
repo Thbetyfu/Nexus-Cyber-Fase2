@@ -1,73 +1,101 @@
-# 🛡️ Nexus Cyber SOC v13.1
+# 🛡️ Nexus Cyber SOC v13.2
 **Autonomous Tactical Defense Grid & Geospatial Threat Intelligence Command Center**
 
 ![Nexus Cyber Dashboard V13](./docs/img/dashboard_v13.png)
 
 ---
 
-## 🛰️ 1. Geospatial Tactical Command Center (Dashboard Overview)
-Nexus Cyber SOC v13 memperkenalkan antarmuka **Situational Awareness** tingkat tinggi yang dirancang untuk mendeduksi ancaman secara visual melalui lima fragmen intelijen utama:
-
-1.  **🔵 Tactical Radar Hub (Center):** Menggunakan *Geospatial Vector Visualization Engine* (GVVE) berbasis SVG Projection. Menampilkan simulasi radar 3D yang memetakan **Sentinel Nodes** (Aset Nasional: OJK, BI, Kemenkeu) dalam koordinat koordinat presisi. 
-    - **Blue Ripple:** Sentinel aktif dan dalam kondisi imunitas penuh.
-    - **Red Vector Arc:** Deteksi serangan siber aktif dari *Remote Attacker IP* melintasi orbit siber.
-    - **Yellow Rotation:** Inisialisasi *Autonomous Self-Repair* (Pemulihan mandiri pasca-serangan).
-    - **Grey Fallout:** Status *Breach Detected* (Aset lumpuh/terinfeksi) akibat muatan payload kritis.
-2.  **📈 Real-Time Traffic Splicer (Bottom):** Grafik *RPS (Request Per Second) Streaming* dengan latensi rendah. Menggunakan *Historical Reconstruction Logic* untuk memetakan volume trafik normal vs ancaman (Honeypot) dalam jendela waktu 60 detik.
-3.  **🧠 Autonomous Operations Log (Bottom-Right):** *Asynchronous Activity Feed* yang menampilkan logika deduksi AI secara transparan—langsung dari *Reflex & Reasoning Engine*.
-4.  **🗺️ Vectors_Live Sidebar (Right):** Telemetri *raw attack* yang menyingkap IP penyerang, koordinat geografis asal, dan jenis metadata serangan (XSS, SQLi, dsb.) secara seketika via *Server-Sent Events (SSE)*.
-5.  **💎 Executive Command Suite (Top):** Panel kendali kedaulatan untuk manajemen workspace multi-tenant, sintesis laporan PDF, dan protokol penyelamatan darurat.
+## 1. 🛑 Masalah Infrastruktur Modern (The Problem)
+Di era kedaulatan digital, institusi publik dan pusat data finansial (OJK, BI, Kemenkeu) menghadapi ancaman yang tidak bisa lagi ditangani oleh sistem keamanan tradisional:
+- **Static Infrastructure Vulnerability**: Server konvensional memiliki titik masuk (IP/Port) yang statis, memudahkan aktor ancaman melakukan **Reconnaissance** dan pemetaan serangan yang presisi.
+- **Rule-Based WAF Obsolescence**: Web Application Firewall tradisional hanya mengandalkan *Regex Signature* yang kaku, sehingga mudah ditembus oleh **0-Day Exploits**, **Obfuscated Payloads**, dan teknik polimorfik.
+- **Asymmetric Warfare Damage**: Kebocoran data masif dapat terjadi dalam hitungan milidetik sebelum operator manusia menyadari adanya penetrasi.
 
 ---
 
-## ⚙️ 2. Core Defense Architecture (Technical Deep-Dive)
-
-### A. Moving Target Defense (MTD) & Topology Shuffling
-Infrastruktur Nexus tidak bersifat statis. Gateway menggunakan modul **Topology Shuffler** yang mengintegrasikan *Entropy Management* berbasis CSPRNG. 
-- **Dynamic Port Binding:** Jalur akses backend berubah secara asinkron tanpa menginterupsi sesi pengguna yang sah (*Graceful Handoff*).
-- **Endpoint Obfuscation:** Menghancurkan upaya pemetaan (*Reconnaissance*) oleh aktor penyerang dengan merotasi target routing internal secara dinamis.
-
-### B. AI-Driven Antibody Generation (Virtual Patching)
-Sistem ini mengimplementasikan **Layer 0: Memory-Resident Immunity**. 
-- **Detection Cycle:** AI Cortex membedah payload Inbound. Jika ditemukan niat eksploitasi, sistem secara otonom menciptakan **Signature Antibody** (tanda tangan digital unik).
-- **O(1) Blocking:** Antibody tersebut disimpan dalam *Distributed Sync Map* dan Redis. Serangan serupa berikutnya akan diblokir secara instan di pintu masuk tanpa membebani AI Cortex, mencapai latensi perlindungan sub-milidetik.
-
-### C. Digital Hallucination (Honeypot Tarpit)
-Bukannya melakukan kedaulatan pemutusan koneksi (HTTP 403), Nexus mengalihkan trafik berbahaya ke dalam **Isolated Tarpit Docker Environment**.
-- **Execution Sandboxing:** Penyerang dibiarkan mengeksekusi payload pada data sintetis (*Fake JSON*).
-- **Latency Attack:** Menyuntikkan jeda waktu (5-10 detik) pada setiap respons untuk menguras sumber daya komputasi dan bandwidth aktor penyerang (*Reverse-Exploitation*).
+## 2. 💡 Kenapa Nexus Cyber Lebih Unggul? (The Solution & UVP)
+Nexus Cyber beroperasi sebagai **Autonomous Guardian** yang menggabungkan eskapisme (MTD) dan agresi intelijen (Dual-Brain AI):
+- **Predictive Intent Deduction**: Alih-alih mencari *keyword* blokir, Nexus membaca *niat logis* serangan menggunakan **Qwen3 Dual-Brain AI**, memungkinkan deteksi ancaman yang belum pernah ditemukan sebelumnya (Zero-Day).
+- **Infinite Escape (MTD)**: Melumpuhkan strategi pemetaan Hacker dengan terus-menerus merotasi topologi backend secara kriptografis tanpa interupsi layanan.
+- **Reverse Attribution & Tarpitting**: Tidak hanya memblokir, Nexus "menjebak" penyerang dalam **Digital Hallucination** (Honeypot) untuk merekam perilaku mereka sembari menguras sumber daya komputasi penyerang.
 
 ---
 
-## 📄 3. Advanced Solutions & Protocols
+## �️ 3. Geospatial Tactical Command Center (Dashboard Overview)
+Antarmuka SOC v13 dirancang untuk **Situational Awareness** tingkat tinggi:
+- **🔵 Tactical Radar Hub:** Memetakan **Sentinel Nodes** (Aset Kritis) dan **Red Vector Arcs** (Serangan Aktif) secara geospatial. Menyediakan visualisasi jarak (*Proximity*) penyerang terhadap target.
+- **📈 Real-Time Traffic Splicer:** Streaming telemetri volume trafik normal vs ancaman secara sub-detik.
+- **🧠 Autonomous Operations Log:** Catatan kognitif deduksi AI Reflex & Reasoning secara transparan.
+- **🗺️ Vectors_Live Sidebar:** Manifest data penyerang (IP, Geo-Coord, Payload Type) yang masuk ke gateway.
 
-### 📂 Executive Intelligence Reporting (PDF Synthesis)
-Nexus menyediakan mesin pelaporan **AIS (Asynchronous Intelligence Synthesis)** yang mampu menyusun dokumen strategi keamanan tingkat kementerian:
-- **Narrative Generation:** AI mendeduksi data telemetri mentah menjadi narasi strategis dalam format formal.
-- **Multi-Tenant Agregation:** Laporan dipalsukan khusus per-workspace (contoh: Laporan Khusus OJK), memastikan kedaulatan dan privasi data antar-institusi terjaga.
-- **One-Click Professional Export:** Menghasilkan PDF *high-fidelity* dengan standar audit ISO-25010 dan ISO-27001 secara instan.
+---
 
-### 🔄 Global State Atomic Purge (System Reset)
-Fitur **Cognitive Purge** memungkinkan operator SOC untuk melakukan pembersihan total terhadap sisa-sisa jejak serangan:
-- **Redis SyncFlush:** Menghapus semua counter statistik, metrik domain, dan antibody persisten di memori Redis secara atomik.
-- **In-Memory Wipe:** Membersihkan buffer logs dan *AI Antibody cache* di seluruh node gateway yang terdistribusi secara sinkron.
+## ⚙️ 4. Arsitektur Pertahanan & Flowchart
 
-### 🚨 Emergency Rescue Protocol (APT Kill-Switch)
-Bila terdeteksi serangan level **APT (Advanced Persistent Threat)** yang berhasil menembus perimeter, operator dapat mengaktifkan **Kill-Switch**:
-- **Instant NAT Isolation:** Memutus semua jalur proxy ke backend target dan mengalihkan 100% trafik ke *Global Honeypot*.
-- **Immunity Lockdown:** Mengunci database antibody dan mengaktifkan mode *Deny-All* hingga audit forensik selesai dilakukan.
+### A. Flowchart Operasi (Sistematik)
+```mermaid
+graph TD
+    A[Public Request Inbound] --> B{MTD Token Bucket}
+    B -- Limit Exceeded --> C[HTTP 429: Too Many Requests]
+    B -- Open Access --> D[Qwen3 32B Reflex Layer]
+    
+    D -- Hostile Match --> E[Honeypot / Digital Hallucination]
+    D -- Ambiguous Payload --> F[Qwen3 235B Reasoning Engine]
+    D -- Benign Traffic --> G[Topology Shuffler Proxy]
+    
+    F -- Exploit Intent Detected --> E
+    F -- Clean --> G
+    
+    G --> H[Secret Target Backend]
+    
+    E --> I[Tarpit Delay 5-10s]
+    I --> J[Synthetic Fake Data 200 OK]
+```
+
+### B. Use Case Penggunaan (SOC Context)
+```mermaid
+graph LR
+    User[Citizen / Valid Agent] --- Akses((SOC Entry Point))
+    Hacker[APT Actor / Botnet] --- Akses
+    
+    subgraph Nexus_Shield[Nexus Autonomous Gateway]
+        Akses --> TB[Token Bucket Rate Limit]
+        TB --> AI{Dual-Brain Intelligence}
+        AI -- Normal --> MTD[Topology Shuffler]
+        AI -- Threat --> HP[(Honeypot Tarpit)]
+    end
+    
+    MTD --> RealDB[Institusi Finansial Database]
+```
+
+---
+
+## 🏗️ 5. Solusi Tingkat Tinggi & Imunitas Otonom
+
+### A. Virtual Patching (Antibody System)
+Sistem **Layer 0** yang menciptakan "Kekebalan Lokal":
+- AI menciptakan **Signature Antibody** seketika setelah serangan pertama terdeteksi.
+- Antibody disebar ke seluruh node (Redis Sync) untuk pemblokiran instan (**O(1) Accuracy**) pada serangan berikutnya tanpa beban AI.
+
+### B. Executive Intelligence Reporting (AIS)
+Mesin pelaporan **Asynchronous Intelligence Synthesis** (AIS):
+- Menarik metrik agregasi dari Redis (Allowed, Blocked, Immune).
+- AI menyusun narasi rekapitulasi keamanan dan rekomendasi strategis dalam format laporan PDF resmi kementerian.
+
+### C. Cognitive Purge (Global Atomic Reset)
+Sinkronisasi pembersihan total jejak serangan:
+- **Atomic Reset:** Menghapus counter statistik, metrik domain, dan antibody buffers secara serentak di seluruh cluster gateway dan distributed cache.
 
 ---
 
 ## 🕹️ Command Center CLI Guide
-Interaksi langsung dengan **AI Cortex** melalui terminal terintegrasi:
 
-| Perintah | Fungsi Teknis | Mekanisme |
-| :--- | :--- | :--- |
-| `/help` | Menampilkan manifest perintah siber. | ASCII UI Rendering |
-| `/status` | Audit kesehatan telemetri & Redis. | Health-Check Probe |
-| `/ban [IP]` | Injeksi antibody manual ke Redis Set. | Antibody Propagation |
-| `@nexus [MSG]`| Query kognitif ke AI Reasoning Engine. | LLM Reasoning Cycle |
+| Perintah | Deskripsi Teknis |
+| :--- | :--- |
+| `/help` | Manifest perintah biner bantuan. |
+| `/status` | Audit kesehatan telemetri & Redis Probe. |
+| `/ban [IP]` | Injeksi antibody manual ke Distributed Set. |
+| `@nexus [MSG]`| Query kognitif ke AI Reasoning Engine. |
 
 ---
-*Nexus Cyber SOC v13: Menjaga Kedaulatan Digital Indonesia dengan Imunitas Otonom & Intelijen Taktis.*
+*Nexus Cyber SOC v13.2: Menjaga Kedaulatan Digital Indonesia dengan Imunitas Otonom & Intelijen Taktis.*
