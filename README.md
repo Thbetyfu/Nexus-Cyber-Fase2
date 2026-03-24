@@ -13,15 +13,27 @@ Di era kedaulatan digital, institusi publik dan pusat data finansial (OJK, BI, K
 
 ---
 
-## 2. 💡 Kenapa Nexus Cyber Lebih Unggul? (The Solution & UVP)
-Nexus Cyber beroperasi sebagai **Autonomous Guardian** yang menggabungkan eskapisme (MTD) dan agresi intelijen (Dual-Brain AI):
-- **Predictive Intent Deduction**: Alih-alih mencari *keyword* blokir, Nexus membaca *niat logis* serangan menggunakan **Qwen3 Dual-Brain AI**, memungkinkan deteksi ancaman yang belum pernah ditemukan sebelumnya (Zero-Day).
-- **Infinite Escape (MTD)**: Melumpuhkan strategi pemetaan Hacker dengan terus-menerus merotasi topologi backend secara kriptografis tanpa interupsi layanan.
-- **Reverse Attribution & Tarpitting**: Tidak hanya memblokir, Nexus "menjebak" penyerang dalam **Digital Hallucination** (Honeypot) untuk merekam perilaku mereka sembari menguras sumber daya komputasi penyerang.
+## 2. 💡 Kenapa Nexus Cyber Lebih Unggul? (Technical UVP)
+Nexus Cyber beroperasi sebagai **Autonomous Guardian** yang menggabungkan eskapisme (MTD) dan agresi intelijen (Dual-Brain AI) melalui sistematisasi berikut:
+
+- **Predictive Intent Deduction (Dual-Brain AI Inference):**
+  - **Layer 1: Reflex System (Sub-100ms Inference)**: Menggunakan model *Quantized LLM* (Llama/Qwen-Fast) untuk melakukan pemindaian *linear-time* terhadap payload Inbound. Berfokus pada deteksi pola anomali tingkat tinggi sebelum paket menyentuh aplikasi.
+  - **Layer 2: Reasoning Engine (Heuristic Deductive Logic)**: Jika ditemukan muatan yang terobfuskasi atau *0-Day candidate*, paket dialihkan ke mesin pemikiran mendalam (Reasoning). Ia mendeduksi *niat logis* (Logical Intent) di balik sintaks berbahaya, bukan sekadar mencocokkan regex statis. Ini memastikan perlindungan terhadap serangan polimorfik yang mampu mengecoh WAF Enterprise sekalipun.
+  - **Immunity Feedback Loop**: Setiap deteksi berhasil akan memicu pembuatan tanda tangan digital unik (*Antibody-Lite*) yang disimpan secara asinkron di Redis Distributed Cache sebagai layer proteksi instan (O(1)) bagi node gateway lainnya.
+
+- **Infinite Escape (Moving Target Defense - MTD):**
+  - **CSPRNG-Driven Topology Rotation**: Menggunakan generator angka acak kriptografis (CSPRNG) untuk merotasi titik temu backend secara berkala. Ini menghancurkan akurasi pemetaan jaringan (*Network Reconnaissance*) oleh penyerang.
+  - **Atomic Proxy Handoff**: Gateway melakukan swapping *reverse-proxy pointer* secara atomik di tingkat memori. Memungkinkan rotasi backend target (IP, Port, Route) tanpa menyebabkan *Packet Drop* atau diskoneksi pada sesi pengguna yang sah (*Active Session Persistence*).
+  - **Entropy-Based Obfuscation**: Dengan mengubah arsitektur internal di bawah karpet secara dinamis, Nexus membuat peta infrastruktur yang ditemukan hacker melalui Nmap atau scanning tool lainnya menjadi kedaluwarsa dalam hitungan detik.
+
+- **Reverse Attribution & Digital Hallucination (Tarpitting):**
+  - **Containerized Honeypot Tarpit**: Bukannya memblokir, trafik berbahaya dialihkan secara transparan ke lingkungan isolasi tinggi (Sandboxed Environment). Peretas akan mendapatkan respons `HTTP 200 OK` semu dengan data sintetis (*Synthetic Intelligence Data*).
+  - **Computational Resource Exhaustion**: Melalui teknik Tarpitting, Nexus menyuntikkan *latency injection* (5,000ms - 10,000ms) pada setiap respons berbahaya. Ini memaksa server penyerang (Botnet) menggunakan memori dan bandwidth secara redundan tanpa memberikan hasil nyata, secara efektif melakukan serangan balik terhadap biaya operasional penyerang.
+  - **Behavioral Profiling**: Selama peretas terjebak dalam "Halusinasi Digital", sistem merekam seluruh taktik, teknik, dan prosedur (TTP) mereka untuk penyusunan laporan intelijen taktis otomatis.
 
 ---
 
-## �️ 3. Geospatial Tactical Command Center (Dashboard Overview)
+## ️ 3. Geospatial Tactical Command Center (Dashboard Overview)
 Antarmuka SOC v13 dirancang untuk **Situational Awareness** tingkat tinggi:
 - **🔵 Tactical Radar Hub:** Memetakan **Sentinel Nodes** (Aset Kritis) dan **Red Vector Arcs** (Serangan Aktif) secara geospatial. Menyediakan visualisasi jarak (*Proximity*) penyerang terhadap target.
 - **📈 Real-Time Traffic Splicer:** Streaming telemetri volume trafik normal vs ancaman secara sub-detik.
