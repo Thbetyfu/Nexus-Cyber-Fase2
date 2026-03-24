@@ -97,11 +97,11 @@ function useTelemetry(url: string, intervalMs: number = 2000) {
 
           // [NEW: HISTORICAL RECONSTRUCTION]
           // Scan the last 30 logs to pre-populate the chart with correct metrics
-          const historicalLogs = (data.recent_logs || []).slice(0, 30).reverse();
+          const historicalLogs = (data.recent_logs || []).slice(0, 40).reverse();
           const reconstructedTimeline = historicalLogs.map((l: any, i: number) => ({
             time: new Date(l.timestamp).toLocaleTimeString("id-ID", { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
             allowed: l.status === "ALLOWED" ? 1 : 0,
-            honeypot: (l.status.includes("HONEYPOT") || l.status.includes("PATCH") || l.status.includes("DIVERTED")) ? 1 : 0
+            honeypot: (l.status.includes("HONEYPOT") || l.status.includes("PATCH") || l.status.includes("DIVERTED") || l.status === "RESCUE_TRIGGERED") ? 1 : 0
           }));
 
           if (reconstructedTimeline.length > 0) {
@@ -390,7 +390,9 @@ const SOCDashboard = () => {
           <div className="flex items-center gap-3 border border-blue-900/40 bg-blue-950/20 rounded-lg px-3 py-1.5 shadow-inner">
             <Server className="w-4 h-4 text-blue-500" />
             <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-blue-400/70 tracking-tighter uppercase leading-none mb-1">OJK_BACKEND_TARGET</span>
+              <span className="text-[10px] font-bold text-blue-400/70 tracking-tighter uppercase leading-none mb-1">
+                {activeDomain === 'all' ? 'GLOBAL_NEXUS_MATRIX' : `${activeDomain.split('.')[0].toUpperCase()}_BACKEND_TARGET`}
+              </span>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-mono text-blue-100">PORT:{shufflerData.port}</span>
                 <div className={`w-1.5 h-1.5 rounded-full ${shufflerData.status === 'CONNECTED' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`}></div>

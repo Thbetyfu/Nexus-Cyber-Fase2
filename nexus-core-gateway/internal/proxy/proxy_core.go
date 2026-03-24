@@ -205,6 +205,7 @@ func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // [NEW: THREAT MAP] ThreatData represents a visual attack event for the 3D map
 type ThreatData struct {
+	ID         string  `json:"id"`
 	AttackerIP string  `json:"attacker_ip"`
 	SourceLat  float64 `json:"source_lat"`
 	SourceLng  float64 `json:"source_lng"`
@@ -267,12 +268,13 @@ func (np *NexusProxy) PublishThreat(ip string, threatType string) {
 	}
 
 	threat := ThreatData{
+		ID:         fmt.Sprintf("TRT-%d-%s", time.Now().UnixNano(), cleanIP),
 		AttackerIP: cleanIP,
 		SourceLat:  lat,
 		SourceLng:  lng,
 		TargetLat:  targetLat,
 		TargetLng:  targetLng,
-		Type:       threatType + "_" + sourceName, // Tagging with source
+		Type:       threatType + "_" + sourceName,
 	}
 
 	payload, _ := json.Marshal(threat)
