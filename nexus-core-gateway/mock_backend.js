@@ -1,0 +1,1 @@
+﻿const http = require('http'); const port = process.argv[2] || 3001; http.createServer((req, res) => { console.log('[BACKEND ' + port + '] Hit: ' + req.url); res.writeHead(200); res.end('Welcome to Shielded Asset ' + port); }).listen(port); console.log('Mock server online at ' + port);

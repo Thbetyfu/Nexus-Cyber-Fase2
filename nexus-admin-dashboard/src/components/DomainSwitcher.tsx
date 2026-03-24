@@ -18,7 +18,7 @@ export default function DomainSwitcher({ activeDomain, onDomainChange, onAddClic
         const timeoutId = setTimeout(() => controller.abort(), 3000);
 
         try {
-            const res = await fetch('http://localhost:8080/api/domains', {
+            const res = await fetch('http://localhost:8081/api/domains', {
                 signal: controller.signal,
                 mode: 'cors',
                 credentials: 'omit'

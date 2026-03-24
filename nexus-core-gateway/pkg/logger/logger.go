@@ -163,7 +163,7 @@ func (l *Logger) LogTraffic(log TelemetryLog) {
 	switch log.Status {
 	case "ALLOWED":
 		l.TotalAllowed++
-	case "HONEYPOT_REDIRECTED", "DIVERTED_TO_HONEYPOT":
+	case "HONEYPOT_REDIRECTED", "DIVERTED_TO_HONEYPOT", "INSTANT_DROP_PATCH":
 		l.TotalHoneypot++
 	case "RATE_LIMITED", "BLOCKED":
 		l.TotalBlocked++
@@ -185,7 +185,7 @@ func (l *Logger) LogTraffic(log TelemetryLog) {
 		switch log.Status {
 		case "ALLOWED":
 			stats.Allowed++
-		case "HONEYPOT_REDIRECTED", "DIVERTED_TO_HONEYPOT":
+		case "HONEYPOT_REDIRECTED", "DIVERTED_TO_HONEYPOT", "INSTANT_DROP_PATCH":
 			stats.Honeypot++
 		case "RATE_LIMITED", "BLOCKED":
 			stats.Blocked++
@@ -279,4 +279,26 @@ func (l *Logger) GetDomains() []string {
 		domains = append(domains, d)
 	}
 	return domains
+}
+
+// ResetAll performs a total cognitive purge of all metrics and memory buffers.
+func (l *Logger) ResetAll() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	// 1. Reset Global Counters
+	l.TotalAllowed = 0
+	l.TotalBlocked = 0
+	l.TotalHoneypot = 0
+	l.TotalPanic = 0
+
+	// 2. Clear Domain Stats
+	l.DomainStats = make(map[string]*DomainStatsEntry)
+
+	// 3. Purge Memory Buffers
+	l.recentLogs = make([]TelemetryLog, 0)
+	l.recentAIEvents = make([]AIEventLog, 0)
+	l.fingerprintCache = make(map[string]TelemetryLog)
+
+	fmt.Println("[SYSTEM-RESET] Cognitive purge complete. All metrics zeroed.")
 }

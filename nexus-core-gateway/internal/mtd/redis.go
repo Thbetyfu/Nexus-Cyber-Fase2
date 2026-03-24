@@ -26,11 +26,11 @@ func NewRedisClient() *RedisClientWrapper {
 
 	client := redis.NewClient(&redis.Options{
 		Addr:         redisURL,
-		Password:     "",  // no password set
-		DB:           0,   // use default DB
-		PoolSize:     100, // connection pooling limit
-		MinIdleConns: 10,
-		DialTimeout:  2 * time.Second,
+		Password:     "",
+		DB:           0,
+		PoolSize:     10, // Small pool for local mode
+		MinIdleConns: 1,
+		DialTimeout:  300 * time.Millisecond, // Instant failover
 		ReadTimeout:  1 * time.Second,
 		WriteTimeout: 1 * time.Second,
 	})
@@ -39,7 +39,6 @@ func NewRedisClient() *RedisClientWrapper {
 	defer cancel()
 
 	if _, err := client.Ping(ctx).Result(); err != nil {
-		log.Printf("[MTD-REDIS] FAILOVER: Redis unreachable %s. Falling back to local/in-memory state.", err)
 		return &RedisClientWrapper{Enabled: false}
 	}
 

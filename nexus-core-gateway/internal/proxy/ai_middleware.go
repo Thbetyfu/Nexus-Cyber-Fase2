@@ -77,6 +77,7 @@ func (np *NexusProxy) AIMiddleware(next http.Handler) http.Handler {
 			np.Logger.LogTraffic(tLog)
 
 			// MTD: Digital Hallucination (Honeypot Redirect)
+			np.PublishThreat(r.RemoteAddr, "VIRTUAL_PATCH_IMMUNE")
 			np.routeToHoneypot(w, r)
 			return
 		}
@@ -126,6 +127,12 @@ func (np *NexusProxy) AIMiddleware(next http.Handler) http.Handler {
 			}
 
 			// MTD: Digital Hallucination (Honeypot Redirect)
+			// [NEW: TACTICAL IP DETECTION] Focus on X-Forwarded-For for testing real geolocation
+			attackerIP := r.RemoteAddr
+			if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+				attackerIP = strings.Split(xff, ",")[0]
+			}
+			np.PublishThreat(attackerIP, threatType)
 			np.routeToHoneypot(w, r)
 			return
 		}
@@ -145,6 +152,17 @@ func (np *NexusProxy) AIMiddleware(next http.Handler) http.Handler {
 		// ML-KEM-768 (Kyber) is the NIST standard for quantum-resistant key exchange.
 		w.Header().Set("X-Quantum-Safe", "ML-KEM-768-Active")
 		w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
+
+		// 4. LOG NORMAL TRAFFIC for Dashboard Statistics
+		np.Logger.LogTraffic(logger.TelemetryLog{
+			Timestamp:    time.Now(),
+			SourceIP:     r.RemoteAddr,
+			Endpoint:     r.URL.Path,
+			Method:       r.Method,
+			Status:       "ALLOWED",
+			TargetDomain: r.Host,
+			ThreatDetail: "PASS_THROUGH_AI",
+		})
 
 		next.ServeHTTP(w, r)
 	})

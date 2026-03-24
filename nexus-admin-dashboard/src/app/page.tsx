@@ -19,6 +19,7 @@ import NechatWidget from '@/components/NechatWidget';
 import DomainSwitcher from '@/components/DomainSwitcher';
 import AddRouteModal from '@/components/AddRouteModal';
 import AiTerminalWidget from '@/components/AiTerminalWidget';
+import ThreatMapWidget from '@/components/ThreatMapWidget';
 
 // Type definition for Live Telemetry Log
 export interface TelemetryLog {
@@ -46,7 +47,6 @@ export interface AIEventLog {
 // Custom Hook for Real-Time SOC Polling (Phase 7: Multi-Tenant aware)
 function useTelemetry(url: string, intervalMs: number = 2000) {
   const [logs, setLogs] = useState<TelemetryLog[]>([])
-  const [history, setHistory] = useState<any[]>([])
   const [metrics, setMetrics] = useState({ allowed: 0, blocked: 0, honeypot: 0, panics: 0 })
   const [shufflerData, setShufflerData] = useState({ port: 3001, status: "OFFLINE" })
   const [isLive, setIsLive] = useState(true)
@@ -55,14 +55,18 @@ function useTelemetry(url: string, intervalMs: number = 2000) {
   const prevTrafficRef = useRef(0)
   const prevHoneypotRef = useRef(0)
   const isFirstFetch = useRef(true)
-  const timeline = useRef<any[]>(Array.from({ length: 40 }).map((_, i) => {
+
+  const initialTimeline = Array.from({ length: 40 }).map((_, i) => {
     const time = new Date(Date.now() - (39 - i) * 2000)
     return {
       time: time.toLocaleTimeString("id-ID", { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       allowed: 0,
       honeypot: 0
     }
-  }))
+  })
+
+  const timeline = useRef<any[]>(initialTimeline)
+  const [history, setHistory] = useState<any[]>(initialTimeline)
 
   useEffect(() => {
     let pollingActive = true;
@@ -77,18 +81,33 @@ function useTelemetry(url: string, intervalMs: number = 2000) {
         if (!pollingActive) return
 
         setIsLive(true)
-        setMetrics(data.stats)
+        const stats = data.stats || { allowed: 0, blocked: 0, honeypot: 0, panics: 0 }
+        setMetrics(stats)
         setShufflerData(data.mtd)
         setLogs((data.recent_logs || []).reverse())
 
-        const currentTrafficTotal = data.stats.allowed || 0
-        const currentHoneypotTotal = data.stats.honeypot || 0
+        const currentTrafficTotal = stats.allowed || 0
+        const currentHoneypotTotal = stats.honeypot || 0
 
-        // 2. MATRIX SYNC: Initialize markers on first run to avoid fake spikes
-        if (isFirstFetch.current) {
+        // 2. MATRIX SYNC: Initialize or Reset markers on gateway restart
+        if (isFirstFetch.current || currentTrafficTotal < prevTrafficRef.current) {
           prevTrafficRef.current = currentTrafficTotal
           prevHoneypotRef.current = currentHoneypotTotal
           isFirstFetch.current = false
+
+          // [NEW: HISTORICAL RECONSTRUCTION]
+          // Scan the last 30 logs to pre-populate the chart with correct metrics
+          const historicalLogs = (data.recent_logs || []).slice(0, 30).reverse();
+          const reconstructedTimeline = historicalLogs.map((l: any, i: number) => ({
+            time: new Date(l.timestamp).toLocaleTimeString("id-ID", { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            allowed: l.status === "ALLOWED" ? 1 : 0,
+            honeypot: (l.status.includes("HONEYPOT") || l.status.includes("PATCH") || l.status.includes("DIVERTED")) ? 1 : 0
+          }));
+
+          if (reconstructedTimeline.length > 0) {
+            timeline.current = [...initialTimeline.slice(0, 40 - reconstructedTimeline.length), ...reconstructedTimeline];
+            setHistory([...timeline.current])
+          }
           return
         }
 
@@ -131,7 +150,10 @@ function useAIEvents(url: string, intervalMs: number = 1000) {
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
-        if (pollingActive) setEvents(data || []);
+        if (pollingActive) {
+          console.log('[NEXUS-DEBUG] AI Events Data:', data);
+          setEvents(data || []);
+        }
       } catch (err) { }
     };
     fetchAPI();
@@ -146,17 +168,38 @@ const SOCDashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [logLimit, setLogLimit] = useState<number>(10); // Default Matrix View Focus
 
-  const { logs, metrics, history, shufflerData, isLive } = useTelemetry(`http://localhost:8080/api/logs?domain=${activeDomain}`, 2000)
-  const aiEvents = useAIEvents('http://localhost:8080/api/ai-events', 1000)
+  const { logs, metrics, history, shufflerData, isLive } = useTelemetry(`http://localhost:8081/api/telemetry?domain=${activeDomain}`, 2000)
+  const aiEvents = useAIEvents('http://localhost:8081/api/ai-events', 1000)
 
   const tableContainerRef = useRef<HTMLDivElement>(null)
   const thoughtContainerRef = useRef<HTMLDivElement>(null)
 
   const handlePanic = async () => {
     try {
-      await fetch("http://localhost:8080/api/panic", { method: "POST" })
+      await fetch("http://localhost:8081/api/panic", { method: "POST" })
     } catch (err) {
       console.error("Rescue Protocol Trigger Failed", err)
+    }
+  }
+
+  const handleReset = async () => {
+    console.log("🚀 NEXUS SYSTEM: Triggering total cognitive purge...");
+    if (window.confirm("🚨 PURGE ALL SYSTEM DATA? This will reset metrics, clear AI memory (antibodies), and wipe all forensic logs. Are you sure?")) {
+      try {
+        const res = await fetch("http://localhost:8081/api/system/reset", {
+          method: "POST",
+          mode: 'cors'
+        })
+        console.log("📡 Gateway Response Status:", res.status);
+        if (res.ok) {
+          console.log("✅ RESET SUCCESSFUL. Refreshing matrix...");
+          alert("✅ NEXUS PURGE SUCCESSFUL: System memory cleared.");
+          window.location.reload();
+        }
+      } catch (err) {
+        console.error("System Purge Failed", err)
+        alert("⚠️ SYSTEM PURGE FAILED: Could not reach Gateway.");
+      }
     }
   }
 
@@ -199,8 +242,8 @@ const SOCDashboard = () => {
           </div>
         </div>
       )}
-      {/* 🛡️ SOC HEADER */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800/80 bg-[#090b0e] shadow-md z-10 sticky top-0 shrink-0">
+      {/* 🛡️ SOC HEADER - Lifted to Absolute Top Layer */}
+      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800/80 bg-[#090b0e] shadow-md z-[1000] sticky top-0 shrink-0">
         <div className="flex items-center gap-4">
           <div className="bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
             <Shield className="w-8 h-8 text-emerald-400" />
@@ -245,7 +288,7 @@ const SOCDashboard = () => {
                 btn.innerText = "📄 Synthesizing PDF intelligence...";
 
                 try {
-                  const res = await fetch(`http://localhost:8080/api/report/generate?domain=${activeDomain}`);
+                  const res = await fetch(`http://localhost:8081/api/report/generate?domain=${activeDomain}`);
                   const data = await res.json();
 
                   if (data.status === 'success') {
@@ -307,46 +350,53 @@ const SOCDashboard = () => {
             📄 Generate AI Report
           </button>
 
-          <div className="flex items-center gap-4">
-            <div className="relative group">
-              <button
-                onClick={handlePanic}
-                title="🚨 KILL-SWITCH DARURAT: Tekan jika ada serangan APT / Zero-Day menembus masuk!"
-                className="flex items-center gap-2 border border-red-500/40 bg-red-950/20 hover:bg-red-500/40 rounded px-3 py-1.5 shadow-inner transition-all"
-              >
-                <Zap className="w-4 h-4 text-red-500 group-hover:animate-pulse" />
-                <span className="text-[11px] font-bold text-red-400 tracking-widest">EMERGENCY_RESCUE</span>
-              </button>
-              <div className="absolute top-full right-0 mt-3 w-80 bg-[#0c0e12] border border-red-500/50 rounded-xl p-4 text-[12px] text-red-100 hidden group-hover:block pointer-events-none z-[999] backdrop-blur-2xl shadow-[0_0_50px_rgba(239,68,68,0.2)] border-t-red-500 border-t-2 animate-in fade-in zoom-in duration-200">
-                <div className="flex items-start gap-4">
-                  <div className="bg-red-500/20 p-2 rounded-lg border border-red-500/30">
-                    <Zap className="w-5 h-5 text-red-500" />
-                  </div>
-                  <div>
-                    <p className="font-black mb-1.5 text-red-400 uppercase tracking-tighter text-sm">Protokol Penyelamatan Darurat</p>
-                    <p className="leading-relaxed opacity-90 text-[11px] text-slate-300">
-                      Gunakan <span className="text-red-400 font-bold italic underline">Kill-Switch</span> ini untuk memutus semua jalur serangan aktif.
-                      Direkomendasikan hanya untuk menghadapi ancaman level <span className="text-white font-bold">APT (Advanced Persistent Threat)</span> atau <span className="text-white font-bold">Zero-Day</span>.
-                    </p>
-                  </div>
+          <button
+            onClick={handleReset}
+            className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/30 hover:bg-yellow-500/20 text-yellow-500 px-3 py-1.5 rounded text-[11px] font-bold transition-all group"
+          >
+            <RotateCcw className="w-3.5 h-3.5 group-hover:rotate-180 transition-transform duration-500" />
+            SYSTEM RESET
+          </button>
+
+          <div className="relative group">
+            <button
+              onClick={handlePanic}
+              title="🚨 KILL-SWITCH DARURAT: Tekan jika ada serangan APT / Zero-Day menembus masuk!"
+              className="flex items-center gap-2 border border-red-500/40 bg-red-950/20 hover:bg-red-500/40 rounded px-3 py-1.5 shadow-inner transition-all group"
+            >
+              <ShieldAlert className="w-4 h-4 text-red-500 group-hover:scale-110 transition-transform" />
+              <span className="text-red-500 font-bold text-[11px] tracking-wider uppercase">Emergency Rescue</span>
+            </button>
+            <div className="absolute top-full right-0 mt-3 w-80 bg-[#0c0e12] border border-red-500/50 rounded-xl p-4 text-[12px] text-red-100 hidden group-hover:block pointer-events-none z-[9999] backdrop-blur-3xl shadow-[0_0_50px_rgba(239,68,68,0.2)] border-t-red-500 border-t-2 animate-in fade-in zoom-in duration-200">
+              <div className="flex items-start gap-4">
+                <div className="bg-red-500/20 p-2 rounded-lg border border-red-500/30">
+                  <Zap className="w-5 h-5 text-red-500" />
                 </div>
-                <div className="mt-4 pt-3 border-t border-red-500/10 flex justify-between items-center">
-                  <span className="text-[10px] text-red-500/50 font-mono">STATUS: READY</span>
-                  <span className="text-[10px] text-red-400/80 italic font-medium px-2 py-0.5 bg-red-500/10 rounded">Nexus Matrix Enforced</span>
+                <div>
+                  <p className="font-black mb-1.5 text-red-400 uppercase tracking-tighter text-sm">Protokol Penyelamatan Darurat</p>
+                  <p className="leading-relaxed opacity-90 text-[11px] text-slate-300">
+                    Gunakan <span className="text-red-400 font-bold italic underline">Kill-Switch</span> ini untuk memutus semua jalur serangan aktif.
+                    Direkomendasikan hanya untuk menghadapi ancaman level <span className="text-white font-bold">APT (Advanced Persistent Threat)</span> atau <span className="text-white font-bold">Zero-Day</span>.
+                  </p>
                 </div>
               </div>
+              <div className="mt-4 pt-3 border-t border-red-500/10 flex justify-between items-center">
+                <span className="text-[10px] text-red-500/50 font-mono">STATUS: READY</span>
+                <span className="text-[10px] text-red-400/80 italic font-medium px-2 py-0.5 bg-red-500/10 rounded">Nexus Matrix Enforced</span>
+              </div>
             </div>
-            <div className="flex items-center gap-3 border border-blue-900/40 bg-blue-950/20 rounded-lg px-3 py-1.5 shadow-inner">
-              <Server className="w-4 h-4 text-blue-500" />
-              <div className="flex flex-col">
-                <span className="text-[10px] font-bold text-blue-400/70 tracking-tighter uppercase leading-none mb-1">OJK_BACKEND_TARGET</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-mono text-blue-100">PORT:{shufflerData.port}</span>
-                  <div className={`w-1.5 h-1.5 rounded-full ${shufflerData.status === 'CONNECTED' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`}></div>
-                  <span className={`text-[9px] font-bold tracking-widest ${shufflerData.status === 'CONNECTED' ? 'text-emerald-500' : 'text-red-500'}`}>
-                    {shufflerData.status}
-                  </span>
-                </div>
+          </div>
+
+          <div className="flex items-center gap-3 border border-blue-900/40 bg-blue-950/20 rounded-lg px-3 py-1.5 shadow-inner">
+            <Server className="w-4 h-4 text-blue-500" />
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold text-blue-400/70 tracking-tighter uppercase leading-none mb-1">OJK_BACKEND_TARGET</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-mono text-blue-100">PORT:{shufflerData.port}</span>
+                <div className={`w-1.5 h-1.5 rounded-full ${shufflerData.status === 'CONNECTED' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`}></div>
+                <span className={`text-[9px] font-bold tracking-widest ${shufflerData.status === 'CONNECTED' ? 'text-emerald-500' : 'text-red-500'}`}>
+                  {shufflerData.status}
+                </span>
               </div>
             </div>
           </div>
@@ -383,44 +433,49 @@ const SOCDashboard = () => {
             </div>
           </div>
 
-          {/* Chart Core Center */}
-          <div className="lg:col-span-3 bg-[#0c0f14]/80 backdrop-blur border border-gray-800/60 rounded-xl p-5 flex flex-col shadow-lg h-[280px]">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-4 flex items-center gap-2">
-              <Activity className="w-4 h-4 text-blue-500" /> Real-time Traffic Vectors
-            </h3>
-            <div className="w-full flex-1 min-h-[220px]">
-              <ResponsiveContainer width="100%" height={220}>
-                <AreaChart data={history} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorSafe" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorThreat" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.5} />
-                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
-                  <XAxis dataKey="time" stroke="#6b7280" fontSize={11} tickMargin={12} axisLine={false} tickLine={false} />
-                  <YAxis
-                    stroke="#6b7280"
-                    fontSize={11}
-                    axisLine={false}
-                    tickLine={false}
-                    width={30}
-                    domain={[0, 'auto']}
-                    allowDecimals={false}
-                  />
-                  <ChartTooltip
-                    contentStyle={{ backgroundColor: '#030712', borderColor: '#1f2937', color: '#f3f4f6', borderRadius: '8px', fontSize: '12px' }}
-                    itemStyle={{ color: '#e5e7eb' }}
-                  />
-                  <Area type="monotone" dataKey="allowed" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorSafe)" isAnimationActive={true} />
-                  <Area type="monotone" dataKey="honeypot" stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#colorThreat)" isAnimationActive={true} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+          {/* 🛡️ LIVE THREAT MAP (Visual Situation Room) */}
+          <div className="lg:col-span-3 h-[400px]">
+            <ThreatMapWidget />
+          </div>
+        </section>
+
+        {/* Real-time Traffic Vectors (Moved below for hierarchy) */}
+        <section className="bg-[#0c0f14]/80 backdrop-blur border border-gray-800/60 rounded-xl p-5 flex flex-col shadow-lg h-[250px] shrink-0">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-4 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-blue-500" /> Real-time Traffic Vectors
+          </h3>
+          <div className="w-full flex-1 min-h-[180px]">
+            <ResponsiveContainer width="100%" height={180}>
+              <AreaChart data={history} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorSafe" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorThreat" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.5} />
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={true} opacity={0.3} />
+                <XAxis dataKey="time" stroke="#9ca3af" fontSize={11} tickMargin={12} axisLine={false} tickLine={false} />
+                <YAxis
+                  stroke="#9ca3af"
+                  fontSize={11}
+                  axisLine={false}
+                  tickLine={false}
+                  width={30}
+                  domain={[0, (dataMax: number) => Math.max(10, dataMax + 5)]}
+                  allowDecimals={false}
+                />
+                <ChartTooltip
+                  contentStyle={{ backgroundColor: '#030712', borderColor: '#374151', color: '#f3f4f6', borderRadius: '8px', fontSize: '12px' }}
+                  itemStyle={{ color: '#e5e7eb' }}
+                />
+                <Area type="monotone" dataKey="allowed" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorSafe)" isAnimationActive={false} dot={{ r: 1, fill: '#3b82f6', fillOpacity: 1, strokeWidth: 0 }} />
+                <Area type="monotone" dataKey="honeypot" stroke="#ef4444" strokeWidth={3} fillOpacity={1} fill="url(#colorThreat)" isAnimationActive={false} dot={{ r: 1, fill: '#ef4444', fillOpacity: 1, strokeWidth: 0 }} />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </section>
 
@@ -438,26 +493,39 @@ const SOCDashboard = () => {
               <span className="text-[10px] text-emerald-500/70 font-mono bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">SELF_REPAIR_LOG</span>
             </div>
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-              {aiEvents.filter(e => e.layer === 'Self-Repair' || e.status === 'MITIGATING' || e.status === 'Mitigating').length === 0 ? (
-                <div className="text-slate-600 font-mono text-xs flex items-center justify-center h-full">No interventions generated. System stable.</div>
-              ) : (
-                <div className="flex flex-col gap-3 relative before:absolute before:inset-0 before:ml-2 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-emerald-500/20 before:to-transparent">
-                  {aiEvents.filter(e => e.layer === 'Self-Repair' || e.status === 'MITIGATING' || e.status === 'Mitigating').reverse().map((ev, i) => (
-                    <div key={i} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                      <div className="bg-emerald-500/20 border border-emerald-500/50 w-4 h-4 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.3)] shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 flex items-center justify-center relative z-10 ml-0 md:ml-auto">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
-                      </div>
-                      <div className="w-[calc(100%-2.5rem)] md:w-[calc(50%-1.5rem)] bg-[#05080c] border border-slate-800/80 p-3 rounded-lg shadow group-hover:border-emerald-500/40 transition-colors">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-emerald-400 text-[10px] uppercase tracking-wider">{ev.status}</span>
-                          <span className="font-mono text-slate-500 text-[9px]">{new Date(ev.timestamp).toLocaleTimeString('en-US', { hour12: false })}</span>
+              {(() => {
+                const activeInterventions = aiEvents.filter(e =>
+                  e.layer === 'Self-Repair' ||
+                  e.layer === 'Virtual-Patch' ||
+                  e.status === 'MITIGATING' ||
+                  e.status === 'INSTANT_DROP_PATCH' ||
+                  e.status === 'IMMUNE' ||
+                  e.status === 'VIRTUAL_PATCH'
+                );
+
+                if (activeInterventions.length === 0) {
+                  return <div className="text-slate-600 font-mono text-xs flex items-center justify-center h-full">No interventions generated. System stable.</div>;
+                }
+
+                return (
+                  <div className="flex flex-col gap-3 relative before:absolute before:inset-0 before:ml-2 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-emerald-500/20 before:to-transparent">
+                    {activeInterventions.reverse().map((ev, i) => (
+                      <div key={i} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                        <div className="bg-emerald-500/20 border border-emerald-500/50 w-4 h-4 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.3)] shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 flex items-center justify-center relative z-10 ml-0 md:ml-auto">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
                         </div>
-                        <p className="text-slate-300 text-[11px] leading-tight break-words">{ev.detail_action}</p>
+                        <div className="w-[calc(100%-2.5rem)] md:w-[calc(50%-1.5rem)] bg-[#05080c] border border-slate-800/80 p-3 rounded-lg shadow group-hover:border-emerald-500/40 transition-colors">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-bold text-emerald-400 text-[10px] uppercase tracking-wider">{ev.status}</span>
+                            <span className="font-mono text-slate-500 text-[9px]">{new Date(ev.timestamp).toLocaleTimeString('en-US', { hour12: false })}</span>
+                          </div>
+                          <p className="text-slate-300 text-[11px] leading-tight break-words">{ev.detail_action}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </section>
@@ -565,20 +633,20 @@ const SOCDashboard = () => {
             </table>
           </div>
         </section>
-      </main>
+      </main >
 
       {/* 🤖 NECHAT WIDGET */}
-      <NechatWidget activeDomain={activeDomain} />
+      < NechatWidget activeDomain={activeDomain} />
 
       {/* ➕ ADD ROUTE MODAL */}
-      <AddRouteModal
+      < AddRouteModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={() => {
           // Success handler
         }}
       />
-    </div>
+    </div >
   )
 }
 

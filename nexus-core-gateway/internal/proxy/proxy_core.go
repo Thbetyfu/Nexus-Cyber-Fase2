@@ -3,11 +3,13 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,6 +34,8 @@ type NexusProxy struct {
 	// [NEW: VIRTUAL PATCHING] Memory-Resident Antibodies for instant O(1) blocking
 	Patches      sync.Map
 	PatchesCount int32
+	// [NEW: THREAT MAP] Internal hub for live visualization in Local Mode
+	ThreatListeners sync.Map // Map[string]chan string for multi-client SSE fan-out
 }
 
 func NewNexusProxy(
@@ -115,6 +119,24 @@ func (np *NexusProxy) AddAntibody(payload string) {
 // UpdateTarget atomically swaps the reverse proxy to a new backend.
 // This is the Graceful Handoff mechanism — in-flight requests on old proxy
 // complete normally; new requests go to the new target.
+// ResetAntibodies clears all learned malicious patterns (Virtual Patches)
+func (np *NexusProxy) ResetAntibodies() {
+	// 1. Local Cache Purge
+	np.Patches.Range(func(key, value interface{}) bool {
+		np.Patches.Delete(key)
+		return true
+	})
+	atomic.StoreInt32(&np.PatchesCount, 0)
+
+	// 2. Global Persistence Wipe (Redis)
+	if mtd.MtdRedis != nil && mtd.MtdRedis.Enabled {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		mtd.MtdRedis.Client.Del(ctx, "nexus:virtual_patches")
+	}
+	fmt.Println("[SYSTEM-RESET] Virtual Patch Antibody database purged.")
+}
+
 func (np *NexusProxy) UpdateTarget(newTarget string) error {
 	remote, err := url.Parse(newTarget)
 	if err != nil {
@@ -181,8 +203,99 @@ func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	dynProxy.ServeHTTP(w, r)
 }
 
+// [NEW: THREAT MAP] ThreatData represents a visual attack event for the 3D map
+type ThreatData struct {
+	AttackerIP string  `json:"attacker_ip"`
+	SourceLat  float64 `json:"source_lat"`
+	SourceLng  float64 `json:"source_lng"`
+	TargetLat  float64 `json:"target_lat"`
+	TargetLng  float64 `json:"target_lng"`
+	Type       string  `json:"type"`
+}
+
+// PublishThreat broadcasts a threat event with real IP tracking or simulation fallback
+func (np *NexusProxy) PublishThreat(ip string, threatType string) {
+	var lat, lng float64
+	sourceName := "SIMULATED_VEC"
+
+	// 🛰️ REAL-IP SATELLITE TRACE
+	cleanIP := ip
+	if strings.Contains(ip, ":") {
+		cleanIP = strings.Split(ip, ":")[0] // Strip port
+	}
+
+	isLocal := cleanIP == "127.0.0.1" || cleanIP == "::1" || cleanIP == "localhost"
+
+	if !isLocal {
+		// Attempt to resolve real Location via Geo-API
+		resp, err := http.Get("http://ip-api.com/json/" + cleanIP)
+		if err == nil {
+			defer resp.Body.Close()
+			var geo struct {
+				Lat     float64 `json:"lat"`
+				Lon     float64 `json:"lon"`
+				Country string  `json:"country"`
+			}
+			if json.NewDecoder(resp.Body).Decode(&geo) == nil && geo.Lat != 0 {
+				lat = geo.Lat
+				lng = geo.Lon
+				sourceName = geo.Country
+			}
+		}
+	}
+
+	// 🛡️ FALLBACK TO WAR-ROOM SIMULATION (If Local or API Failed)
+	if lat == 0 {
+		sources := [][]float64{
+			{55.75, 37.61}, {39.90, 116.40}, {38.90, -77.03}, {51.50, -0.12},
+			{35.67, 139.65}, {48.85, 2.35}, {52.52, 13.40}, {-23.55, -46.63},
+			{-33.86, 151.20}, {1.35, 103.81},
+		}
+		src := sources[time.Now().UnixNano()%int64(len(sources))]
+		lat, lng = src[0], src[1]
+	}
+
+	// 🔵 DYNAMIC TARGET LOCALIZATION (Nexus Sentinel Hub)
+	targetLat, targetLng := -6.20, 106.81 // Default: Jakarta
+	domain := strings.ToLower(threatType) // This is a bit dirty, let's use a mapping logic later
+	if strings.Contains(domain, "portal") {
+		targetLat, targetLng = 1.35, 103.81 // Singapore
+	} else if strings.Contains(domain, "audit") {
+		targetLat, targetLng = -33.86, 151.20 // Sydney
+	} else if strings.Contains(domain, "cloud") {
+		targetLat, targetLng = 50.11, 8.68 // Frankfurt
+	}
+
+	threat := ThreatData{
+		AttackerIP: cleanIP,
+		SourceLat:  lat,
+		SourceLng:  lng,
+		TargetLat:  targetLat,
+		TargetLng:  targetLng,
+		Type:       threatType + "_" + sourceName, // Tagging with source
+	}
+
+	payload, _ := json.Marshal(threat)
+	msg := string(payload)
+
+	// Redis Broadcast
+	if mtd.MtdRedis != nil && mtd.MtdRedis.Enabled {
+		ctx := context.Background()
+		mtd.MtdRedis.Client.Publish(ctx, "nexus:threat_stream", payload)
+	}
+
+	// Internal Broadcast to Dashboards
+	np.ThreatListeners.Range(func(key, value interface{}) bool {
+		ch := value.(chan string)
+		select {
+		case ch <- msg:
+		default:
+		}
+		return true
+	})
+}
+
 // routeToHoneypot performs silent NAT to the Honeypot — Digital Hallucination.
-// The attacker NEVER knows they've been redirected.
 func (np *NexusProxy) routeToHoneypot(w http.ResponseWriter, r *http.Request) {
 	honeypotURL := "http://localhost:9090" // Honeypot's internal address
 	target, _ := url.Parse(honeypotURL)

@@ -135,20 +135,44 @@ func main() {
 	mux.HandleFunc("/api/ai/status", aiStatusHandler())                                        // Health Check
 	mux.HandleFunc("/api/cli/execute", cliExecuteHandler(telemetry, shuffler, gateway.Router)) // Interactive Terminal CLI
 	mux.HandleFunc("/api/logs", telemetryHandler(shuffler, telemetry, target))                 // Phase 6 requirement
-	mux.HandleFunc("/api/domains", domainsHandler(telemetry))                                  // Multi-Tenant Workspace Switcher
+	mux.HandleFunc("/api/domains", xxxDomainsHandler(telemetry))                               // Multi-Tenant Workspace Switcher
 	mux.HandleFunc("/api/nechat", nechatHandler(telemetry))                                    // Phase 6 Nechat Assist
 	mux.HandleFunc("/api/panic", panicHandler(shuffler, telemetry))                            // Phase 6 Rescue Protocol
 	mux.HandleFunc("/api/report/generate", reportGenerateHandler(telemetry))                   // [NEW: EXECUTIVE REPORTING]
-	mux.HandleFunc("/api/verify-session", gateway.VerifySessionHandler)                        // CGNAT Bypass Challenge Validator
-	mux.Handle("/", gatewayHandler)                                                            // all other requests go to the proxy
+	mux.HandleFunc("/api/stream/threats", threatsStreamHandler(gateway))                       // [NEW: THREAT MAP STREAMS]
+	mux.HandleFunc("/api/system/reset", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// 1. Reset In-Memory RAM Stats
+		telemetry.ResetAll()
+
+		// 2. Reset AI Virtual Patches
+		gateway.ResetAntibodies()
+
+		// 3. Reset Redis Persistent Counters (Phase 7 Multi-Tenant)
+		if mtd.MtdRedis != nil && mtd.MtdRedis.Enabled {
+			ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+			defer cancel()
+			// Clear all Nexus related traffic counters
+			mtd.MtdRedis.Client.FlushDB(ctx) // Total Purge for Kedaulatan
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"status":"success","message":"System metrics and AI memory cleared across RAM and Redis."}`)
+	})
+	mux.HandleFunc("/api/verify-session", gateway.VerifySessionHandler) // CGNAT Bypass Challenge Validator
+	mux.Handle("/", gatewayHandler)                                     // all other requests go to the proxy
 
 	// 9. Root Matrix Shield: Wrap EVERYTHING in AI Intelligence
 	// 3. CORS Shield (Access for Dashboard)
 	corsShield := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+			w.Header().Set("Access-Control-Allow-Headers", "*")
 
 			if r.Method == "OPTIONS" {
 				w.WriteHeader(http.StatusOK)
@@ -158,9 +182,15 @@ func main() {
 		})
 	}
 
-	rootShield := gateway.AIMiddleware(corsShield(mux))
+	rootShield := corsShield(gateway.AIMiddleware(mux))
 
-	port := ":8080"
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	if !strings.HasPrefix(port, ":") {
+		port = ":" + port
+	}
 	fmt.Printf("[NEXUS] Gateway Active on port %s -> Proxying to %s\n", port, target)
 	fmt.Println("[NEXUS] MODE: Phase 5 MTD Active | Honeypot: :9090 | Rate Limiter: 50r/s")
 

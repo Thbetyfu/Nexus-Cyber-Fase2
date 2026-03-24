@@ -21,6 +21,11 @@ func BrowserIntegrityCheck(next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// [LAYER_0_PREFLIGHT_GUARD] Bypass Preflight for Dashboard Stability
+		if r.Method == http.MethodOptions {
+			next.ServeHTTP(w, r)
+			return
+		}
 		// 1. Matrix Skip: Allow SOC Dashboard and verify-session APIs
 		/*
 		   NEXUS_FIX_LOG: [LAYER_0_WHITELIST_GUARD]

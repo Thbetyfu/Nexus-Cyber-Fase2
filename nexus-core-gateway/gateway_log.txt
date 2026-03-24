@@ -1,0 +1,34 @@
+[NEXUS] NEXUS CYBER GATEWAY - ENTERPRISE PRODUCTION INITIALIZING...
+redis: 2026/03/24 22:47:24 pool.go:617: redis: connection pool: failed to dial after 5 attempts: dial tcp [::1]:6379: connectex: No connection could be made because the target machine actively refused it.
+redis: 2026/03/24 22:47:24 pool.go:617: redis: connection pool: failed to dial after 5 attempts: dial tcp [::1]:6379: connectex: No connection could be made because the target machine actively refused it.
+redis: 2026/03/24 22:47:24 pool.go:617: redis: connection pool: failed to dial after 5 attempts: dial tcp [::1]:6379: connectex: No connection could be made because the target machine actively refused it.
+redis: 2026/03/24 22:47:24 pool.go:617: redis: connection pool: failed to dial after 5 attempts: dial tcp [::1]:6379: connectex: No connection could be made because the target machine actively refused it.
+redis: 2026/03/24 22:47:24 pool.go:617: redis: connection pool: failed to dial after 5 attempts: dial tcp [::1]:6379: connectex: No connection could be made because the target machine actively refused it.
+2026/03/24 22:47:25 [MTD-REDIS] FAILOVER: Redis unreachable context deadline exceeded. Falling back to local/in-memory state.
+redis: 2026/03/24 22:47:24 pool.go:617: redis: connection pool: failed to dial after 5 attempts: dial tcp [::1]:6379: connectex: No connection could be made because the target machine actively refused it.
+redis: 2026/03/24 22:47:24 pool.go:617: redis: connection pool: failed to dial after 5 attempts: dial tcp [::1]:6379: connectex: No connection could be made because the target machine actively refused it.
+redis: 2026/03/24 22:47:24 pool.go:617: redis: connection pool: failed to dial after 5 attempts: dial tcp [::1]:6379: connectex: No connection could be made because the target machine actively refused it.
+redis: 2026/03/24 22:47:24 pool.go:617: redis: connection pool: failed to dial after 5 attempts: dial tcp [::1]:6379: connectex: No connection could be made because the target machine actively refused it.
+redis: 2026/03/24 22:47:24 pool.go:617: redis: connection pool: failed to dial after 5 attempts: dial tcp [::1]:6379: connectex: No connection could be made because the target machine actively refused it.
+redis: 2026/03/24 22:47:24 pool.go:617: redis: connection pool: failed to dial after 5 attempts: dial tcp [::1]:6379: connectex: No connection could be made because the target machine actively refused it.
+redis: 2026/03/24 22:47:24 pool.go:617: redis: connection pool: failed to dial after 5 attempts: dial tcp [::1]:6379: connectex: No connection could be made because the target machine actively refused it.
+redis: 2026/03/24 22:47:24 pool.go:617: redis: connection pool: failed to dial after 5 attempts: dial tcp [::1]:6379: connectex: No connection could be made because the target machine actively refused it.
+redis: 2026/03/24 22:47:24 pool.go:617: redis: connection pool: failed to dial after 5 attempts: dial tcp [::1]:6379: connectex: No connection could be made because the target machine actively refused it.
+2026/03/24 22:47:25 [MTD] TopologyShuffler ACTIVE — Rotating every 60s across 1 port targets
+2026/03/24 22:47:25 [HONEYPOT] Digital Hallucination server ACTIVE on :9090 (random tarpit: 5s-10s)
+2026/03/24 22:47:25 [ROUTER] Mapping established: localhost:8080 -> http://host.docker.internal:3001
+2026/03/24 22:47:25 [ROUTER] Mapping established: ojk.localhost -> http://host.docker.internal:3001
+2026/03/24 22:47:25 [ROUTER] Mapping established: kemenkeu.localhost -> http://host.docker.internal:3001
+2026/03/24 22:47:25 [ROUTER] Mapping established: bi.localhost -> http://host.docker.internal:3001
+[NEXUS] Gateway Active on port :8080 -> Proxying to http://host.docker.internal:3001
+[NEXUS] MODE: Phase 5 MTD Active | Honeypot: :9090 | Rate Limiter: 50r/s
+[PQC] Quantum Cryptography Module (ML-KEM) Initialized.
+[AI-COGNITION] 22:47:25 | Layer: Core | Status: SYSTEM_READY | [PQC SHIELD] Post-Quantum Cryptography Module (ML-KEM-768) Initialized. Protecting against Quantum Threat Vectors.
+[NET-TRAFFIC] 22:48:23 | ALLOWED | localhost:8080 | [::1]:64910 -> /api/status | 0ms
+2026/03/24 22:48:25 http: proxy error: dial tcp 192.168.1.34:3001: connectex: No connection could be made because the target machine actively refused it.
+[NET-TRAFFIC] 22:48:25 | ALLOWED | localhost:8080 | [::1]:64910 -> /api/status | 0ms
+2026/03/24 22:48:25 [MTD-SHUFFLE] Backend rotated: :3001 -> :3001 | Time: 2026-03-24T22:48:25+08:00
+2026/03/24 22:48:25 [MTD] Graceful handoff complete -> http://host.docker.internal:3001
+2026/03/24 22:48:27 http: proxy error: dial tcp 192.168.1.34:3001: connectex: No connection could be made because the target machine actively refused it.
+2026/03/24 22:49:25 [MTD-SHUFFLE] Backend rotated: :3001 -> :3001 | Time: 2026-03-24T22:49:25+08:00
+2026/03/24 22:49:25 [MTD] Graceful handoff complete -> http://host.docker.internal:3001
