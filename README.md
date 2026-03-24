@@ -1,123 +1,73 @@
-# 🛡️ Nexus Cyber
-**Autonomous Dual-Brain Infrastructure Protection & Moving Target Defense (MTD)**
+# 🛡️ Nexus Cyber SOC v13.1
+**Autonomous Tactical Defense Grid & Geospatial Threat Intelligence Command Center**
+
+![Nexus Cyber Dashboard V13](./docs/img/dashboard_v13.png)
 
 ---
 
-## 1. 🛑 Masalah yang Ingin Diselesaikan (The Problem)
-Di era digital saat ini, institusi publik dan pusat data finansial (seperti BSSN, BI, OJK) menjadi sasaran empuk serangan siber tingkat lanjut (Advanced Persistent Threats/APT) dan serangan _Botnet_ / DDoS skala besar. Masalah utama yang ada saat ini:
-- **Infrastruktur Statis**: Server tradisional bersifat kaku (IP dan titik masuk selalu sama), menjadikannya target yang mudah bagi *hacker* untuk dipetakan secara diam-diam (reconnaissance) lalu dieksploitasi kapan saja.
-- **Rule-Based WAF yang Mudah Ditembus**: Web Application Firewall konvensional hanya mengandalkan daftar aturan blokir yang kaku (_regex signatures_). Peretas modern dengan mudah membypass batasan ini menggunakan skema _obfuscation_, _0-day exploits_, atau *payload* yang belum terdaftar di database dunia.
-- **Data Leak / Kebocoran Masif**: Begitu *hacker* menemukan endpoint rentan, penyedotan jutaan data rekam nasabah dan privasi dapat lenyap dalam hitungan per-sekian detik.
+## 🛰️ 1. Geospatial Tactical Command Center (Dashboard Overview)
+Nexus Cyber SOC v13 memperkenalkan antarmuka **Situational Awareness** tingkat tinggi yang dirancang untuk mendeduksi ancaman secara visual melalui lima fragmen intelijen utama:
+
+1.  **🔵 Tactical Radar Hub (Center):** Menggunakan *Geospatial Vector Visualization Engine* (GVVE) berbasis SVG Projection. Menampilkan simulasi radar 3D yang memetakan **Sentinel Nodes** (Aset Nasional: OJK, BI, Kemenkeu) dalam koordinat koordinat presisi. 
+    - **Blue Ripple:** Sentinel aktif dan dalam kondisi imunitas penuh.
+    - **Red Vector Arc:** Deteksi serangan siber aktif dari *Remote Attacker IP* melintasi orbit siber.
+    - **Yellow Rotation:** Inisialisasi *Autonomous Self-Repair* (Pemulihan mandiri pasca-serangan).
+    - **Grey Fallout:** Status *Breach Detected* (Aset lumpuh/terinfeksi) akibat muatan payload kritis.
+2.  **📈 Real-Time Traffic Splicer (Bottom):** Grafik *RPS (Request Per Second) Streaming* dengan latensi rendah. Menggunakan *Historical Reconstruction Logic* untuk memetakan volume trafik normal vs ancaman (Honeypot) dalam jendela waktu 60 detik.
+3.  **🧠 Autonomous Operations Log (Bottom-Right):** *Asynchronous Activity Feed* yang menampilkan logika deduksi AI secara transparan—langsung dari *Reflex & Reasoning Engine*.
+4.  **🗺️ Vectors_Live Sidebar (Right):** Telemetri *raw attack* yang menyingkap IP penyerang, koordinat geografis asal, dan jenis metadata serangan (XSS, SQLi, dsb.) secara seketika via *Server-Sent Events (SSE)*.
+5.  **💎 Executive Command Suite (Top):** Panel kendali kedaulatan untuk manajemen workspace multi-tenant, sintesis laporan PDF, dan protokol penyelamatan darurat.
 
 ---
 
-## 2. 💡 Solusi yang Dihadirkan (The Solution)
-**Nexus Cyber** hadir sebagai gerbang pertahanan otonom berarsitektur _Zero-Trust_ yang mengkombinasikan agresi dan eskapisme untuk menggagalkan skema penyerang paling cerdas sekalipun:
-1. **Dual-Brain AI Intelligence**: Tidak mendeteksi *syntax* kaku, tapi membaca *niat ancaman* (Logical Intent). Mengkombinasikan dua arsitektur Large Language Model tercepat: **Qwen3 32B Reflex** untuk blokir kilat, serta **Qwen3 235B Reasoning** untuk mendeduksi anomali obfuskasi kompleks layaknya pakar Cybersecurity manusia.
-2. **Moving Target Defense (MTD)**: Modul pertahanan dinamis yang merotasi posisi lapisan backend (*Topology Shuffler*) secara tersembunyi dengan generator kriptografi acak terbatas (CSPRNG), menghancurkan peta infrastruktur seketika dari kacamata hacker.
-3. **Digital Hallucination (Honeypot Tarpit)**: Bukannya memblokir akses penyerang dengan `HTTP 403 Forbidden` (yang mana menunjukkan padanya bahwa pertahanan ada dan memaksa mereka mencari taktik lain), Nexus akan mengarahkan serangan ganas ke sebuah dimensi palsu (Honeypot). Mereka ditahan disana (efek Tarpit) dan akhirnya diberikan respons semu "Fake Data 200 OK". Membuat penyerang puas mencuri *data sampah halusinasi*.
+## ⚙️ 2. Core Defense Architecture (Technical Deep-Dive)
+
+### A. Moving Target Defense (MTD) & Topology Shuffling
+Infrastruktur Nexus tidak bersifat statis. Gateway menggunakan modul **Topology Shuffler** yang mengintegrasikan *Entropy Management* berbasis CSPRNG. 
+- **Dynamic Port Binding:** Jalur akses backend berubah secara asinkron tanpa menginterupsi sesi pengguna yang sah (*Graceful Handoff*).
+- **Endpoint Obfuscation:** Menghancurkan upaya pemetaan (*Reconnaissance*) oleh aktor penyerang dengan merotasi target routing internal secara dinamis.
+
+### B. AI-Driven Antibody Generation (Virtual Patching)
+Sistem ini mengimplementasikan **Layer 0: Memory-Resident Immunity**. 
+- **Detection Cycle:** AI Cortex membedah payload Inbound. Jika ditemukan niat eksploitasi, sistem secara otonom menciptakan **Signature Antibody** (tanda tangan digital unik).
+- **O(1) Blocking:** Antibody tersebut disimpan dalam *Distributed Sync Map* dan Redis. Serangan serupa berikutnya akan diblokir secara instan di pintu masuk tanpa membebani AI Cortex, mencapai latensi perlindungan sub-milidetik.
+
+### C. Digital Hallucination (Honeypot Tarpit)
+Bukannya melakukan kedaulatan pemutusan koneksi (HTTP 403), Nexus mengalihkan trafik berbahaya ke dalam **Isolated Tarpit Docker Environment**.
+- **Execution Sandboxing:** Penyerang dibiarkan mengeksekusi payload pada data sintetis (*Fake JSON*).
+- **Latency Attack:** Menyuntikkan jeda waktu (5-10 detik) pada setiap respons untuk menguras sumber daya komputasi dan bandwidth aktor penyerang (*Reverse-Exploitation*).
 
 ---
 
-## 3. 🚀 Kenapa Solusi Ini Lebih Ideal?
-- **AI-Native Tanpa Update Rule Berkala**: Bekerja terstruktur bebas dari rutinitas update _Signature_. Modul reasoning mampu menangkap tipe serangan masa depan (Zero-Day) seakan-akan ia ahli bahasa sintaks.
-- **Pelemahan Atribut Penyerang (Reverse-Engage)**: Tidak hanya melindungi server asli, namun juga *membuang-buang Bandwidth, Waktu komputasi, serta Biaya Finansial Server penyerang (Botnet)* karena waktu *timeout* yang panjang disuntikkan oleh sistem Tarpit kita tanpa membebani memori lokal.
-- **Smooth Dashboard Compliance**: Tersedia *Telemetry Dashboard Command Center* berpusat metrik ISO 25010 dengan indikator waktu nyata tanpa *memory-leak* yang siap memonitor perang sibernya secara 60fps untuk kepentingan eksekutif tingkat atas.
+## 📄 3. Advanced Solutions & Protocols
+
+### 📂 Executive Intelligence Reporting (PDF Synthesis)
+Nexus menyediakan mesin pelaporan **AIS (Asynchronous Intelligence Synthesis)** yang mampu menyusun dokumen strategi keamanan tingkat kementerian:
+- **Narrative Generation:** AI mendeduksi data telemetri mentah menjadi narasi strategis dalam format formal.
+- **Multi-Tenant Agregation:** Laporan dipalsukan khusus per-workspace (contoh: Laporan Khusus OJK), memastikan kedaulatan dan privasi data antar-institusi terjaga.
+- **One-Click Professional Export:** Menghasilkan PDF *high-fidelity* dengan standar audit ISO-25010 dan ISO-27001 secara instan.
+
+### 🔄 Global State Atomic Purge (System Reset)
+Fitur **Cognitive Purge** memungkinkan operator SOC untuk melakukan pembersihan total terhadap sisa-sisa jejak serangan:
+- **Redis SyncFlush:** Menghapus semua counter statistik, metrik domain, dan antibody persisten di memori Redis secara atomik.
+- **In-Memory Wipe:** Membersihkan buffer logs dan *AI Antibody cache* di seluruh node gateway yang terdistribusi secara sinkron.
+
+### 🚨 Emergency Rescue Protocol (APT Kill-Switch)
+Bila terdeteksi serangan level **APT (Advanced Persistent Threat)** yang berhasil menembus perimeter, operator dapat mengaktifkan **Kill-Switch**:
+- **Instant NAT Isolation:** Memutus semua jalur proxy ke backend target dan mengalihkan 100% trafik ke *Global Honeypot*.
+- **Immunity Lockdown:** Mengunci database antibody dan mengaktifkan mode *Deny-All* hingga audit forensik selesai dilakukan.
 
 ---
 
-## 4. ⚙️ Arsitektur Sistem 
-Nexus Cyber diabstraksikan menjadi **3 Lapisan Utama** (The Nexus Shield):
-1. **Network Parameter Layer (MTD)**  
-   - *Per-IP Token Bucket:* Membendung serangan spam flooding.
-   - *Topology Shuffler:* Mengalihkan alur titik temu reverse proxy di bawah karpet secara CSPRNG.
-2. **Cognitive Detection Layer (AI Dual-Brain)**
-   - *Reflex System (Groq GPU / Llama Fast)*: Layer 1 mitigasi sub-100ms.
-   - *Reasoning Engine (OpenRouter XL)*: Layer 2 deep-thinking logic.
-3. **Trap & Reverse Execution Layer**
-   - Transisi *Benign Traffic* ke institusi/backend secara transparan (User Aman).
-   - Pengalihan _Malicious Traffic_ ke dalam _Server Tarpit Asing_ isolasi tinggi.
+## 🕹️ Command Center CLI Guide
+Interaksi langsung dengan **AI Cortex** melalui terminal terintegrasi:
 
----
-
-## 5. 👥 Use Case Diagram
-
-```mermaid
-graph LR
-    User[Valid User / Citizen] --- Akses((Hit Entry Point))
-    Hacker[Attacker / Botnet] --- Akses
-    
-    subgraph Nexus_Gateway[Nexus Cyber Gateway]
-        Akses --> MTD[Token Bucket Limit]
-        MTD --> Inspeksi{Dual-Brain AI}
-        Inspeksi -- Normal --> ProxyAsli[Secret Target Backend]
-        Inspeksi -- Malicious --> Honeypot[(Digital Hallucination)]
-    end
-```
-
----
-
-## 6. 🔄 Flowchart Penggunaan Program
-
-```mermaid
-graph TD
-    A[Public Request Inbound] --> B{Token Bucket MTD}
-    B -- Limit Tercapai --> C[HTTP 429 Too Many Requests]
-    B -- Akses Dibuka --> D[Qwen3 32B Reflex Layer]
-    D -- Jelas Serangan --> E[Honeypot Tarpit Server]
-    D -- Abu-abu / Obfuskasi --> F[Qwen3 235B Reasoning Engine]
-    D -- Jelas Normal --> G
-    
-    F -- Ditemukan Niat Eksploitasi --> E
-    F -- Bersih --> G[Reverse Proxy Topology Shuffler]
-    
-    G --> H[Institusi Finansial Asli]
-    
-    E --> I[Tarpit Delay 5-10s]
-    I --> J[Digital Hallucination Fake JSON 200 OK]
-```
-
----
-
-## 7. 💎 Yang Membedakan Dengan Produk Lainnya (UVP)
-
-| Fitur / Metrik | WAF Tradisional (Konvensional) | Solusi Enterprise / Cloud Security Umum | **NEXUS CYBER OTONOMUS** |
-| :--- | :--- | :--- | :--- |
-| **Response Terhadap Serangan** | Drop Koneksi seketika (HTTP 403 Forbidden) | Blocking Endpoint / Captcha | **Digital Hallucination & Tarpit Trap**. Berikan ilusi ke Hacker bahwa ia menang lalu merekam aksinya |
-| **Cara Filterisasi Payload** | Regex / IP Blacklisting Statis | Machine Learning Sederhana | **LLM Dual-Brain (Reasoning AI)**. Ia paham _"Kenapa"_ teks itu ditulis (_Logical deduction_) |
-| **Peta Jaringan Backend** | Publik IP & Port tertembak tetap *Fixed* | IP internal Load Balancer konstan | **Topology Shuffler (MTD)**. Pindah target *routing* secara asinkron tanpa disadari siapa pun |
-| **Beban Latensi Pengguna Sah** | Sering kena *False Positive* pada sintaks unik | Pemrosesan paket yang membebani | AI membedah filter dalam hitungan milidetik secara asinkron dengan _go-routines_. |
-
----
-
-## 8. 🕹️ Nexus Cyber: Core CLI Command Guide  
-Nexus Command Center menyediakan antarmuka terminal interaktif yang terintegrasi langsung dengan **AI Cortex**. Gunakan perintah berikut di dalam widget Terminal SOC untuk kontrol penuh:
-
-| Command | Action / Deskripsi | Output Visual |
+| Perintah | Fungsi Teknis | Mekanisme |
 | :--- | :--- | :--- |
-| `/help` | Menampilkan menu bantuan perintah biner yang tersedia. | ASCII Help Menu |
-| `/status` | Melakukan audit kesehatan sistem, koneksi Redis (Distributed Cache), dan latensi AI Cortex. | System Health Report |
-| `/ban [IP]` | Melakukan pemblokiran manual terhadap IP target untuk diarahkan ke Honeypot Tarpit selama 24 jam. | [SUCCESS] IP Banned |
-| `@nexus [Query]` | Melakukan interaksi kognitif dengan AI Reasoning untuk profiling ancaman secara mendalam. | **[NEXUS-AI] Thinking Mode active** |
+| `/help` | Menampilkan manifest perintah siber. | ASCII UI Rendering |
+| `/status` | Audit kesehatan telemetri & Redis. | Health-Check Probe |
+| `/ban [IP]` | Injeksi antibody manual ke Redis Set. | Antibody Propagation |
+| `@nexus [MSG]`| Query kognitif ke AI Reasoning Engine. | LLM Reasoning Cycle |
 
 ---
-
-## 9. 🏗️ Solusi & Arsitektur Sistem: Imunitas Otonom & Intelijen Pelaporan
-
-Nexus Cyber kini telah berevolusi menjadi sistem pertahanan yang memiliki **Memori Imunitas** (Antibody System) dan **Intelijen Eksekutif** otomatis:
-
-### A. Arsitektur Imunitas Otonom (Layer 0: Virtual Patching)
-Untuk mengurangi beban komputasi AI Cortex, Nexus mengimplementasikan **Antibody Signature Caching**:
-- **Deteksi Pertama**: AI Reflex Filter melakukan deduksi ancaman pada paket trafik baru.
-- **Generasi Antibody**: Jika ancaman terdeteksi, Gateway secara otonom menciptakan tanda tangan serangan (*Signature*) di memori lokal (sync.Map) dan Redis.
-- **Instant Blocking (O(1))**: Serangan serupa di masa depan tidak akan lagi diproses oleh AI, melainkan langsung diblokir di pintu masuk (**Layer 0**) dengan latensi mendekati nol.
-
-### B. Arsitektur Intelijen Pelaporan (Professional PDF Executive Report)
-Sistem pelaporan kini memiliki kedaulatan data penuh yang tersegmentasi per-workspace:
-- **Metrik Agregasi**: Gateway menarik data statistik insidensi (Allowed, Blocked, Immune) langsung dari Distributed Cache Redis.
-- **AI Synthesis (Gemini/Llama)**: AI Cortex menyusun narasi rekapitulasi keamanan, analisis ancaman taktis, dan rekomendasi strategis dalam Bahasa Indonesia yang formal.
-- **Resilient Fallback (Synthetic Intelligence)**: Jika AI eksternal tidak tersedia, sistem secara otonom beralih ke penyusunan laporan sintetis lokal agar dokumen eksekutif TETAP tersedia 100% tanpa hambatan teknis.
-- **One-Click PDF Rendering**: Laporan disajikan dalam format HTML High-Fidelity yang siap dicetak menjadi PDF berstandar SOC kementerian.
-
----
-*Nexus Cyber: Menjaga Kedaulatan Digital Indonesia dengan Imunitas Otonom.*
+*Nexus Cyber SOC v13: Menjaga Kedaulatan Digital Indonesia dengan Imunitas Otonom & Intelijen Taktis.*
