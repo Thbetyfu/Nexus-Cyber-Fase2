@@ -111,3 +111,5 @@ Sinkronisasi pembersihan total jejak serangan:
 
 ---
 *Nexus Cyber SOC v13.2: Menjaga Kedaulatan Digital Indonesia dengan Imunitas Otonom & Intelijen Taktis.*
+
+kerjakan di laptop ROG
