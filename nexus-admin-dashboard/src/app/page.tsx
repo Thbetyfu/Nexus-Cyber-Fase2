@@ -20,6 +20,7 @@ import DomainSwitcher from '@/components/DomainSwitcher';
 import AddRouteModal from '@/components/AddRouteModal';
 import AiTerminalWidget from '@/components/AiTerminalWidget';
 import ThreatMapWidget from '@/components/ThreatMapWidget';
+import EmergencyAlarm from '@/components/EmergencyAlarm';
 
 // Type definition for Live Telemetry Log
 export interface TelemetryLog {
@@ -168,15 +169,34 @@ const SOCDashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [logLimit, setLogLimit] = useState<number>(10); // Default Matrix View Focus
 
-  const { logs, metrics, history, shufflerData, isLive } = useTelemetry(`http://localhost:8081/api/telemetry?domain=${activeDomain}`, 2000)
-  const aiEvents = useAIEvents('http://localhost:8081/api/ai-events', 1000)
+  const { logs, metrics, history, shufflerData, isLive } = useTelemetry(`http://localhost:8080/api/telemetry?domain=${activeDomain}`, 2000)
+  const aiEvents = useAIEvents('http://localhost:8080/api/ai-events', 1000)
+
+  // 🚨 [ALARM SYSTEM] State and Logic
+  const [isEmergency, setIsEmergency] = useState(false);
+  const [lastHoneypotCount, setLastHoneypotCount] = useState(0);
+
+  useEffect(() => {
+    // [ALARM TRIGGER LOGIC]
+    // Trigger if metrics increase OR if the latest log is a threat
+    const hasNewThreat = metrics.honeypot > lastHoneypotCount && lastHoneypotCount !== 0;
+    const latestLogIsThreat = logs.length > 0 && logs[0].status !== "ALLOWED";
+
+    if (hasNewThreat || latestLogIsThreat) {
+      if (!isEmergency) {
+        console.log("🚨 [ALARM] Siege detected via Metrics or Log! Activating Emergency Mode.");
+        setIsEmergency(true);
+      }
+    }
+    setLastHoneypotCount(metrics.honeypot);
+  }, [metrics.honeypot, logs, isEmergency]);
 
   const tableContainerRef = useRef<HTMLDivElement>(null)
   const thoughtContainerRef = useRef<HTMLDivElement>(null)
 
   const handlePanic = async () => {
     try {
-      await fetch("http://localhost:8081/api/panic", { method: "POST" })
+      await fetch("http://localhost:8080/api/panic", { method: "POST" })
     } catch (err) {
       console.error("Rescue Protocol Trigger Failed", err)
     }
@@ -186,7 +206,7 @@ const SOCDashboard = () => {
     console.log("🚀 NEXUS SYSTEM: Triggering total cognitive purge...");
     if (window.confirm("🚨 PURGE ALL SYSTEM DATA? This will reset metrics, clear AI memory (antibodies), and wipe all forensic logs. Are you sure?")) {
       try {
-        const res = await fetch("http://localhost:8081/api/system/reset", {
+        const res = await fetch("http://localhost:8080/api/system/reset", {
           method: "POST",
           mode: 'cors'
         })
@@ -215,7 +235,12 @@ const SOCDashboard = () => {
   }, [aiEvents])
 
   return (
-    <div className="relative min-h-screen bg-[#06080b] text-gray-200 font-sans selection:bg-blue-600/30 flex flex-col">
+    <div className={`relative min-h-screen bg-[#06080b] text-gray-200 font-sans selection:bg-blue-600/30 flex flex-col transition-colors duration-1000 ${isEmergency ? 'shadow-[inset_0_0_100px_rgba(220,38,38,0.2)]' : ''}`}>
+      <EmergencyAlarm 
+        isActive={isEmergency} 
+        onAcknowledge={() => setIsEmergency(false)} 
+        threatDetail={logs[0]?.threat_detail || logs[0]?.status}
+      />
       {!isLive && (
         <div className="absolute inset-0 z-[100] backdrop-blur-sm bg-black/40 flex items-center justify-center p-6">
           <div className="bg-[#0c0f14] border border-red-900/40 rounded-2xl p-8 shadow-2xl max-w-md w-full text-center flex flex-col items-center gap-6">
@@ -288,7 +313,7 @@ const SOCDashboard = () => {
                 btn.innerText = "📄 Synthesizing PDF intelligence...";
 
                 try {
-                  const res = await fetch(`http://localhost:8081/api/report/generate?domain=${activeDomain}`);
+                  const res = await fetch(`http://localhost:8080/api/report/generate?domain=${activeDomain}`);
                   const data = await res.json();
 
                   if (data.status === 'success') {

@@ -31,7 +31,7 @@ export default function RootLayout({
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col font-sans relative">
         {children}
-        <NechatWidget />
+        <NechatWidget activeDomain="Nexus SOC" />
       </body>
     </html>
   );

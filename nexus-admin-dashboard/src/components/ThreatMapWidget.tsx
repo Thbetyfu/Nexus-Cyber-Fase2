@@ -43,7 +43,7 @@ export default function ThreatMapWidget() {
 
     useEffect(() => {
         setMounted(true);
-        const eventSource = new EventSource('http://localhost:8081/api/stream/threats');
+        const eventSource = new EventSource('http://localhost:8080/api/stream/threats');
 
         eventSource.onmessage = (event) => {
             try {

@@ -16,6 +16,7 @@ import (
 	"unsafe"
 
 	"github.com/nexus-cyber/nexus-core-gateway/internal/ai"
+	"github.com/nexus-cyber/nexus-core-gateway/internal/avse"
 	"github.com/nexus-cyber/nexus-core-gateway/internal/mtd"
 	"github.com/nexus-cyber/nexus-core-gateway/pkg/logger"
 )
@@ -64,7 +65,7 @@ func NewNexusProxy(
 	atomic.StorePointer(&np.proxyPtr, unsafe.Pointer(initialProxy))
 
 	// Pre-load current target to Redis for dynamic routing consistency
-	np.Router.AddRoute("localhost:8080", target)
+	np.Router.AddRoute("localhost", target)
 	np.Router.AddRoute("ojk.localhost", target)
 	np.Router.AddRoute("kemenkeu.localhost", target)
 	np.Router.AddRoute("bi.localhost", target)
@@ -159,6 +160,40 @@ func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var body []byte
 	if r.Body != nil {
 		body, _ = io.ReadAll(r.Body)
+		
+		// [AVSE - PHASE 1 INTEGRATION]
+		// Cek apakah request ini berisi gambar
+		contentType := r.Header.Get("Content-Type")
+		if strings.HasPrefix(contentType, "image/jpeg") || strings.HasPrefix(contentType, "image/png") {
+			cleanResult, err := avse.SanitizeImage(body)
+			if err != nil {
+				// [PHASE 4: ANTI-BOMB PROTECTION]
+				// Jika gambar terlalu besar atau rusak, blokir demi keamanan server
+				np.Logger.LogAIEvent(logger.AIEventLog{
+					Layer:        "AVSE (Visual Shield)",
+					Status:       "BLOCKED",
+					DetailAction: fmt.Sprintf("Blocked suspicious image: %v", err),
+				})
+				http.Error(w, "Nexus [403]: Image blocked for security reasons (Resolution too high or corrupt).", http.StatusForbidden)
+				return
+			}
+			
+			// Gunakan data yang sudah dicuci
+			body = cleanResult.Data
+			
+			// Log ke Dashboard (Fase 3: Risk Reporting)
+			status := "SANITIZED"
+			if cleanResult.RiskScore > 70 {
+				status = "THREAT_CLEANED"
+			}
+			
+			np.Logger.LogAIEvent(logger.AIEventLog{
+				Layer:        "AVSE (Visual Shield)",
+				Status:       status,
+				DetailAction: fmt.Sprintf("Visual Clean [%d%% Risk]: %d B -> %d B (%s)", cleanResult.RiskScore, cleanResult.OriginalSize, cleanResult.CleanedSize, cleanResult.Format),
+			})
+		}
+
 		r.Body = io.NopCloser(bytes.NewBuffer(body))
 	}
 
@@ -182,11 +217,17 @@ func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	np.Logger.EnrichLog(&tLog, r)
 	np.Logger.LogTraffic(tLog)
 
-	targetURL, found := np.Router.Lookup(r.Host)
+	// [NEW] Host normalization: Strip port if present (fixes localhost:8080 match)
+	host := r.Host
+	if strings.Contains(host, ":") {
+		host = strings.Split(host, ":")[0]
+	}
+
+	targetURL, found := np.Router.Lookup(host)
 	if !found {
 		// Domain not protected, return 404
-		fmt.Printf("[NEXUS] ROUTING_ERROR: Host '%s' not found in dynamic router table.\n", r.Host)
-		http.Error(w, fmt.Sprintf("NEXUS [404]: Domain '%s' is not protected by this matrix.", r.Host), http.StatusNotFound)
+		fmt.Printf("[NEXUS] ROUTING_ERROR: Host '%s' (normalized: '%s') not found in dynamic router table.\n", r.Host, host)
+		http.Error(w, fmt.Sprintf("NEXUS [404]: Domain '%s' is not protected by this matrix.", host), http.StatusNotFound)
 		return
 	}
 

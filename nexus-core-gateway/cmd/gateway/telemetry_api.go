@@ -233,13 +233,66 @@ func nechatHandler(telemetry *logger.Logger) http.HandlerFunc {
 			Domain string `json:"domain"`
 		}
 		json.NewDecoder(r.Body).Decode(&payload)
-		reply, _ := nechat.Chat(telemetry.GetRecentLogs(), payload.Query)
+		reply, err := nechat.Chat(telemetry.GetRecentLogs(), payload.Query)
+		if err != nil {
+			fmt.Printf("[ALPACA-ERROR] Nechat failed: %v\n", err)
+			reply = "🤖 **Nexus Core Error:** Gagal terhubung ke sistem ALPACA. \n\n**Solusi:**\n1. Pastikan aplikasi Alpaca sedang terbuka.\n2. Cek apakah model `llama3` sudah di-download di dalam Alpaca.\n3. Coba restart gateway."
+		}
 		json.NewEncoder(w).Encode(map[string]string{"reply": reply})
 	}
 }
 
 func cliExecuteHandler(telemetry *logger.Logger, shuffler *mtd.TopologyShuffler, router *proxy.DynamicRouter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]string{"response": "CLI Layer Active"})
+		var payload struct {
+			Command string `json:"command"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		cmd := strings.ToLower(payload.Command)
+		var response string
+
+		switch {
+		case cmd == "help" || cmd == "/help":
+			response = "[NEXUS-HELP] Available Commands:\n" +
+				"  - status      : Check MTD & Backend Health\n" +
+				"  - stats       : Show global traffic metrics\n" +
+				"  - shuffle     : Trigger manual topology rotation\n" +
+				"  - @nexus [q]  : Ask AI about current threats\n" +
+				"  - clear       : Clear terminal session"
+
+		case cmd == "status":
+			port, next := shuffler.GetStatus()
+			response = fmt.Sprintf("[STATUS] MTD Active Port: %d | Next Shuffle: %ds | Backend: ONLINE", port, next)
+
+		case cmd == "stats":
+			response = fmt.Sprintf("[STATS] Allowed: %d | Blocked: %d | Honeypot: %d", 
+				telemetry.TotalAllowed, telemetry.TotalBlocked, telemetry.TotalHoneypot)
+
+		case cmd == "shuffle":
+			shuffler.ManualShuffle()
+			response = "[ACTION] Manual Topology Rotation Triggered. New port mapping established."
+
+		case strings.HasPrefix(cmd, "@nexus"):
+			query := strings.TrimPrefix(payload.Command, "@nexus ")
+			// Use the AI client to analyze the situation based on recent logs
+			nechat := ai.NewNechatClient()
+			reply, err := nechat.Chat(telemetry.GetRecentLogs(), query)
+			if err != nil {
+				fmt.Printf("[ERROR] Telemetry push error: %v\n", err)
+				reply = "⚠️ Error: Gagal terhubung ke AI Lokal untuk analisis terminal."
+			}
+			json.NewEncoder(w).Encode(map[string]string{"output": "[NEXUS-AI] Analysis:\n" + reply})
+			return
+
+		default:
+			response = fmt.Sprintf("[ERROR] Unknown command: '%s'. Type /help for assistance.", cmd)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"response": response})
 	}
 }

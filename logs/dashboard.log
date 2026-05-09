@@ -1,0 +1,13 @@
+
+> nexus-admin-dashboard@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.0 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://10.60.55.57:3000
+✓ Ready in 391ms
+
+ GET / 200 in 614ms (next.js: 254ms, application-code: 361ms)
+ GET / 200 in 75ms (next.js: 7ms, application-code: 68ms)
+ GET / 200 in 62ms (next.js: 4ms, application-code: 58ms)
+[?25h

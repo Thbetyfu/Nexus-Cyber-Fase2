@@ -66,3 +66,5 @@ nexus_traffic.log
 financial.db
 vulnerable-financial-api/financial.db
 nexus-core-gateway/nexus_traffic.log
+nexus-brain-lab/
+NEXUS-CORE-BRAIN.Modelfile

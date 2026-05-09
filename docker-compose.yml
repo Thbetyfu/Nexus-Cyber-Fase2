@@ -44,27 +44,32 @@ services:
       - "host.docker.internal:host-gateway"
     restart: always
 
-  # Next.js Command Center SOC (MTD Matrix v7.0)
+  # Next.js Command Center SOC (MTD Matrix v13.2)
   dashboard:
     build:
       context: ./nexus-admin-dashboard
       dockerfile: Dockerfile
-      target: deps # Stop at deps stage to keep node_modules ready
     container_name: nexus_dashboard
     ports:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8080/api
-      - NODE_ENV=development # Force dev mode for HMR
+      - NODE_ENV=production
     env_file:
       - .env
-    volumes:
-      - ./nexus-admin-dashboard:/app
-      - /app/node_modules # Persistent node_modules in container
-      - /app/.next # Persistent next build artifacts
-    command: npm run dev
     depends_on:
       - gateway
+    restart: always
+
+  # [NEW: THE PROTECTED TARGET]
+  # Website Portofolio yang akan dijaga oleh Nexus
+  portfolio:
+    build:
+      context: ./Portfolio-website
+      dockerfile: Dockerfile
+    container_name: target_portfolio
+    # Kita TIDAK membuka port portfolio ke publik (Hanya internal Docker)
+    # Ini memaksa hacker harus lewat Gateway (8080)
     restart: always
 
 volumes:

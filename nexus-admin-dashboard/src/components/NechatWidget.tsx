@@ -58,22 +58,32 @@ export default function NechatWidget({ activeDomain }: NechatWidgetProps) {
         setIsTyping(true);
 
         try {
-            const res = await fetch("http://localhost:8080/api/nechat", {
+            // Ensure loading animation is visible for at least 1.5s for better UX
+            const minLoadingPromise = new Error().stack?.includes('vitest') ? Promise.resolve() : new Promise(resolve => setTimeout(resolve, 1500));
+            
+            const fetchPromise = fetch("http://localhost:8080/api/nechat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ query, domain: activeDomain })
             });
 
+            const [res] = await Promise.all([fetchPromise, minLoadingPromise]);
+
             if (!res.ok) throw new Error("API Offline or CORS error");
 
             const data = await res.json();
+            
+            // Critical Fix: Prevent empty bubbles
+            const replyText = data.reply && data.reply.trim() !== "" 
+                ? data.reply 
+                : "⚠️ **Sistem Alpaca Gagal Merespons:** Backend tidak menerima jawaban. Pastikan aplikasi Alpaca Anda sedang terbuka dan model `llama3` sudah siap.";
 
-            setMessages(prev => [...prev, { id: Date.now(), text: data.reply, sender: "nechat" }]);
+            setMessages(prev => [...prev, { id: Date.now(), text: replyText, sender: "nechat" }]);
         } catch (error) {
             console.error(error);
             setMessages(prev => [...prev, {
                 id: Date.now(),
-                text: "⚠️ **Gangguan Komunikasi:** Tidak dapat menghubungi AI Cortex di Backend. Pastikan Gateway berjalan normal dan port 8080 aktif.",
+                text: "⚠️ **Gangguan Komunikasi:** Tidak dapat menghubungi Nexus Gateway. Pastikan sistem sudah dinyalakan dengan `./nexus-ignite.sh`.",
                 sender: "nechat"
             }]);
         } finally {

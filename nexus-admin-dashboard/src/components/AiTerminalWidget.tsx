@@ -96,11 +96,43 @@ export default function AiTerminalWidget() {
     }, []);
 
     const [inputValue, setInputValue] = useState("");
+    const [commandHistory, setCommandHistory] = useState<string[]>([]);
+    const [historyIndex, setHistoryIndex] = useState(-1);
 
     const handleCommandSubmit = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (commandHistory.length > 0) {
+                const newIndex = Math.min(historyIndex + 1, commandHistory.length - 1);
+                setHistoryIndex(newIndex);
+                setInputValue(commandHistory[commandHistory.length - 1 - newIndex]);
+            }
+            return;
+        }
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (historyIndex > 0) {
+                const newIndex = historyIndex - 1;
+                setHistoryIndex(newIndex);
+                setInputValue(commandHistory[commandHistory.length - 1 - newIndex]);
+            } else {
+                setHistoryIndex(-1);
+                setInputValue("");
+            }
+            return;
+        }
+
         if (e.key === 'Enter' && inputValue.trim() !== '') {
             const cmd = inputValue.trim();
             setInputValue("");
+            setHistoryIndex(-1);
+            setCommandHistory(prev => [...prev, cmd].slice(-20));
+
+            if (cmd.toLowerCase() === 'clear') {
+                setStream([]);
+                return;
+            }
 
             // Optimistic UI Append
             setStream(prev => {
@@ -139,7 +171,7 @@ export default function AiTerminalWidget() {
                                 next[i] = {
                                     ...next[i],
                                     status: "OK",
-                                    detail_action: data.response
+                                    detail_action: data.output || data.response || "[EMPTY_RESPONSE]"
                                 };
                                 return next;
                             }
@@ -149,7 +181,7 @@ export default function AiTerminalWidget() {
                             timestamp: new Date().toISOString(),
                             layer: "System",
                             status: "OK",
-                            detail_action: data.response
+                            detail_action: data.output || data.response || "[EMPTY_RESPONSE]"
                         }];
                     });
                 } else {
