@@ -69,14 +69,30 @@ func NewLogger() (*Logger, error) {
 		return nil, err
 	}
 
-	return &Logger{
+	l := &Logger{
 		file:             f,
 		aiFile:           aiF,
 		recentLogs:       make([]TelemetryLog, 0),
 		recentAIEvents:   make([]AIEventLog, 0),
 		fingerprintCache: make(map[string]TelemetryLog),
 		DomainStats:      make(map[string]*DomainStatsEntry),
-	}, nil
+	}
+
+	// [NEXUS_V12_ASSET_SHIELD]: Initialize critical national assets for total visibility
+	criticalAssets := []string{
+		"localhost",
+		"ojk.go.id",
+		"bi.go.id",
+		"kemenkeu.go.id",
+		"portal.nexus",
+		"audit.nexus",
+		"cloud.nexus",
+	}
+	for _, a := range criticalAssets {
+		l.DomainStats[a] = &DomainStatsEntry{}
+	}
+
+	return l, nil
 }
 
 type DomainStatsEntry struct {
@@ -301,4 +317,38 @@ func (l *Logger) ResetAll() {
 	l.fingerprintCache = make(map[string]TelemetryLog)
 
 	fmt.Println("[SYSTEM-RESET] Cognitive purge complete. All metrics zeroed.")
+}
+
+// DeleteDomain permanently removes a domain and its associated metrics from the system.
+func (l *Logger) DeleteDomain(domain string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	dom := strings.ToLower(domain)
+	
+	// 1. Remove from DomainStats
+	delete(l.DomainStats, dom)
+
+	// 2. Filter out from memory buffer
+	filteredLogs := make([]TelemetryLog, 0)
+	for _, log := range l.recentLogs {
+		if strings.ToLower(log.TargetDomain) != dom {
+			filteredLogs = append(filteredLogs, log)
+		}
+	}
+	l.recentLogs = filteredLogs
+
+	fmt.Printf("[DOMAIN-DELETE] Domain '%s' and its metrics have been purged from memory.\n", dom)
+}
+
+// AddDomain manually registers a domain in the telemetry stats so it appears in the dashboard.
+func (l *Logger) AddDomain(domain string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	dom := strings.ToLower(domain)
+	if _, ok := l.DomainStats[dom]; !ok {
+		l.DomainStats[dom] = &DomainStatsEntry{}
+		fmt.Printf("[DOMAIN-ADD] Domain '%s' manually registered in the matrix.\n", dom)
+	}
 }

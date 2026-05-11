@@ -113,33 +113,24 @@ func xxxDomainsHandler(telemetry *logger.Logger) http.HandlerFunc {
 			return
 		}
 
+		if r.Method == http.MethodDelete {
+			domain := r.URL.Query().Get("domain")
+			fmt.Printf("[API-DELETE] Request to purge domain: %s\n", domain)
+			if domain == "" || domain == "all" {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]string{"status": "error", "message": "Invalid domain for deletion"})
+				return
+			}
+			telemetry.DeleteDomain(domain)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Domain purged from matrix"})
+			return
+		}
+
+		// GET logic: Returns only active domains from the managed list
 		domains := telemetry.GetDomains()
-		// [NEXUS_V12_ASSET_SHIELD]: Force inclusion of critical national assets for total visibility
-		criticalAssets := []string{
-			"localhost",
-			"ojk.go.id",
-			"bi.go.id",
-			"kemenkeu.go.id",
-			"portal.nexus",
-			"audit.nexus",
-			"cloud.nexus",
-		}
-
-		uniqueDomains := make(map[string]bool)
-		for _, d := range domains {
-			uniqueDomains[d] = true
-		}
-		for _, a := range criticalAssets {
-			uniqueDomains[a] = true
-		}
-
-		finalDomains := make([]string, 0, len(uniqueDomains))
-		for d := range uniqueDomains {
-			finalDomains = append(finalDomains, d)
-		}
-
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(finalDomains)
+		json.NewEncoder(w).Encode(domains)
 	}
 }
 
@@ -208,11 +199,33 @@ func aiStatusHandler() http.HandlerFunc {
 	}
 }
 
-func routesHandler(router *proxy.DynamicRouter) http.HandlerFunc {
+func routesHandler(router *proxy.DynamicRouter, telemetry *logger.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			routes, _ := router.GetAllRoutes()
 			json.NewEncoder(w).Encode(routes)
+			return
+		}
+
+		if r.Method == http.MethodPost {
+			var payload struct {
+				Domain    string `json:"domain"`
+				TargetURL string `json:"target_url"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			// 1. Add to Proxy Router
+			router.AddRoute(payload.Domain, payload.TargetURL)
+			
+			// 2. Register in Telemetry so it appears in the dropdown immediately
+			telemetry.AddDomain(payload.Domain)
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"status": "success", "domain": payload.Domain})
+			return
 		}
 	}
 }

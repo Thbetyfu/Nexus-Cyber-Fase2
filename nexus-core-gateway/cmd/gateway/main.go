@@ -128,7 +128,7 @@ func main() {
 
 	// 8. Start Server wrapped in top-level mux for internal APIs
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/routes", routesHandler(gateway.Router)) // Zero-Code Onboarding
+	mux.HandleFunc("/api/routes", routesHandler(gateway.Router, telemetry)) // Zero-Code Onboarding
 	mux.HandleFunc("/api/telemetry", telemetryHandler(shuffler, telemetry, target))
 	mux.HandleFunc("/api/ai-events", aiEventsHandler(telemetry))                               // AI Cognitive Core Tracker
 	mux.HandleFunc("/api/ai/stream", aiStreamHandler())                                        // SSE for Live CLI

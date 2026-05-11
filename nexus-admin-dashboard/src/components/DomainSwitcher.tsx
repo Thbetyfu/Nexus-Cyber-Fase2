@@ -1,15 +1,16 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Globe, ChevronDown, Check, Plus } from 'lucide-react';
+import { Globe, ChevronDown, Check, Plus, Trash2, AlertTriangle } from 'lucide-react';
 
 interface DomainSwitcherProps {
     activeDomain: string;
     onDomainChange: (domain: string) => void;
     onAddClick: () => void;
+    refreshTrigger?: number;
 }
 
-export default function DomainSwitcher({ activeDomain, onDomainChange, onAddClick }: DomainSwitcherProps) {
+export default function DomainSwitcher({ activeDomain, onDomainChange, onAddClick, refreshTrigger = 0 }: DomainSwitcherProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [domains, setDomains] = useState<string[]>(['all']);
 
@@ -20,8 +21,7 @@ export default function DomainSwitcher({ activeDomain, onDomainChange, onAddClic
         try {
             const res = await fetch('http://localhost:8080/api/domains', {
                 signal: controller.signal,
-                mode: 'cors',
-                credentials: 'omit'
+                mode: 'cors'
             });
             clearTimeout(timeoutId);
 
@@ -32,17 +32,14 @@ export default function DomainSwitcher({ activeDomain, onDomainChange, onAddClic
                     setDomains(['all', ...fetchedDomains.filter((d: string) => d !== 'all')]);
                 }
             }
-        } catch (err) {
-            // [TOTAL_SILENCE] Silencing all network errors during gateway restarts
-        }
+        } catch (err) {}
     };
 
     useEffect(() => {
         fetchDomains();
-        // Refresh list every 10 seconds
         const interval = setInterval(fetchDomains, 10000);
         return () => clearInterval(interval);
-    }, []);
+    }, [refreshTrigger]);
 
     return (
         <div className="relative">
@@ -66,9 +63,11 @@ export default function DomainSwitcher({ activeDomain, onDomainChange, onAddClic
                 <>
                     <div
                         className="fixed inset-0 z-[100]"
-                        onClick={() => setIsOpen(false)}
+                        onClick={() => {
+                            setIsOpen(false);
+                        }}
                     />
-                    <div className="absolute top-full left-0 mt-2 w-64 bg-[#0a0c10] border border-slate-700/50 rounded-xl shadow-2xl p-2 z-[101] backdrop-blur-xl animate-in fade-in zoom-in duration-150">
+                    <div className="absolute bottom-full right-0 mb-2 w-72 bg-[#0a0c10]/95 border border-slate-700/50 rounded-xl shadow-2xl p-2 z-[101] backdrop-blur-xl animate-in fade-in zoom-in duration-150">
                         <div className="p-2 border-b border-slate-800/50 mb-1">
                             <button
                                 onClick={() => {
@@ -81,24 +80,25 @@ export default function DomainSwitcher({ activeDomain, onDomainChange, onAddClic
                                 Add New Workspace
                             </button>
                         </div>
-                        <div className="max-h-[250px] overflow-y-auto custom-scrollbar">
+                        <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
                             {domains.map((domain) => (
-                                <button
-                                    key={domain}
-                                    onClick={() => {
-                                        onDomainChange(domain);
-                                        setIsOpen(false);
-                                    }}
-                                    className={`w-full flex items-center justify-between p-3 rounded-lg text-xs transition-all ${activeDomain === domain
-                                        ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                                        }`}
-                                >
-                                    <span className="font-mono">
-                                        {domain === 'all' ? 'All Workspaces (Global)' : domain}
-                                    </span>
-                                    {activeDomain === domain && <Check className="w-3.5 h-3.5" />}
-                                </button>
+                                <div key={domain} className="group/item relative flex items-center gap-1">
+                                    <button
+                                        onClick={() => {
+                                            onDomainChange(domain);
+                                            setIsOpen(false);
+                                        }}
+                                        className={`flex-1 flex items-center justify-between p-3 rounded-lg text-[11px] transition-all ${activeDomain === domain
+                                            ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                            : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                                            }`}
+                                    >
+                                        <span className="font-mono truncate max-w-[200px]">
+                                            {domain === 'all' ? 'All Workspaces (Global)' : domain}
+                                        </span>
+                                        {activeDomain === domain && <Check className="w-3 h-3" />}
+                                    </button>
+                                </div>
                             ))}
                         </div>
                     </div>
@@ -107,3 +107,4 @@ export default function DomainSwitcher({ activeDomain, onDomainChange, onAddClic
         </div>
     );
 }
+
