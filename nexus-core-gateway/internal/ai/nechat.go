@@ -44,8 +44,16 @@ func (n *NechatClient) Chat(logs []logger.TelemetryLog, query string) (string, e
 		logsContext = logsContext[len(logsContext)-2000:]
 	}
 
-	systemPrompt := "Anda adalah NEXUS-CORE-BRAIN, pusat komando pertahanan siber otonom. Analisis log trafik secara taktis dan berikan laporan keamanan profesional dalam Bahasa Indonesia."
-	userPrompt := fmt.Sprintf("Data Telemetri:\n%s\n\nInstruksi Admin: %s", logsContext, query)
+	systemPrompt := `Anda adalah NEXUS-SOC-BRAIN v2.5, Inti Kecerdasan Pertahanan Siber Otonom. 
+Lingkungan: Nexus Command Center (NCC) | Teknologi: Moving Target Defense (MTD), PQC, Digital Hallucination.
+Tugas: 
+1. Analisis Log Telemetri secara taktis (Cari pola SQLi, XSS, Brute Force, Scanning).
+2. Berikan laporan keamanan yang sangat detail, profesional, dan berfokus pada data.
+3. Berikan saran taktis (misal: "Aktifkan Shield", "Lakukan Shuffle", "Investigasi IP").
+4. Jelaskan bagaimana MTD (port rotation) melindungi Target (Portfolio OJK).
+Bahasa: Indonesia Profesional (Bahasa Intelijen SOC).`
+
+	userPrompt := fmt.Sprintf("STATUS TELEMETRI SAAT INI:\n%s\n\nPERTANYAAN ADMIN: %s\n\nBerikan analisis mendalam:", logsContext, query)
 
 	reqBody, _ := json.Marshal(map[string]interface{}{
 		"model":    n.Model,
@@ -55,8 +63,10 @@ func (n *NechatClient) Chat(logs []logger.TelemetryLog, query string) (string, e
 		},
 		"stream": false,
 		"options": map[string]interface{}{
-			"num_ctx": 1024, // Optimasi RAM
-			"temperature": 0.1,
+			"num_ctx":     4096, // Upgraded Context Window for Long-term Memory
+			"temperature": 0.2,  // Focused & Precise Reasoning
+			"top_p":       0.9,
+			"repeat_penalty": 1.2,
 		},
 	})
 
@@ -97,19 +107,48 @@ func (n *NechatClient) Chat(logs []logger.TelemetryLog, query string) (string, e
 }
 
 func (n *NechatClient) generateExpertFallback(logs []logger.TelemetryLog, query string) string {
+	q := strings.ToLower(query)
+	
+	// Analyze Logs for Heuristics
 	sqli := 0
+	brute := 0
+	blocked := 0
 	for _, l := range logs {
-		if strings.Contains(strings.ToUpper(l.Status), "SQL") {
+		status := strings.ToUpper(l.Status)
+		if strings.Contains(status, "SQL") || strings.Contains(strings.ToUpper(l.Endpoint), "SELECT") {
 			sqli++
+		}
+		if strings.Contains(status, "BLOCKED") || strings.Contains(status, "DROPPED") {
+			blocked++
+		}
+		if strings.Contains(status, "AUTH") || strings.Contains(status, "LOGIN") {
+			brute++
 		}
 	}
 
 	res := "🛡️ **NEXUS EXPERT ANALYST (Operational Mode)**\n\n"
-	if sqli > 0 {
-		res += fmt.Sprintf("⚠️ **KRITIKAL:** Terdeteksi %d upaya anomali SQL Injection. Mitigasi MTD Shuffle sedang berjalan.", sqli)
-	} else {
-		res += "✅ **AMAN:** Analisis telemetri menunjukkan parameter keamanan dalam kondisi optimal."
+	
+	// Smart Keyword Dispatcher
+	if strings.Contains(q, "apa") || strings.Contains(q, "siapa") || strings.Contains(q, "tahu") {
+		res += "Saya adalah modul analisis otonom Nexus. Saya memantau trafik secara real-time dan menggunakan MTD (Moving Target Defense) untuk melindungi aset Anda.\n\n"
 	}
-	res += "\n\n*Catatan: Menggunakan analisis otonom cepat karena AI sedang sinkronisasi.*"
+	
+	if strings.Contains(q, "website") || strings.Contains(q, "lindung") {
+		res += "Saat ini saya sedang melindungi portal portfolio yang terhubung ke data center simulasi OJK. Sistem MTD aktif merotasi port setiap 60 detik untuk membingungkan penyerang.\n\n"
+	}
+
+	if sqli > 0 {
+		res += fmt.Sprintf("⚠️ **Peringatan:** Terdeteksi %d upaya SQL Injection. Sistem telah memblokir IP tersebut secara otomatis.\n", sqli)
+	} else if blocked > 0 {
+		res += fmt.Sprintf("ℹ️ **Status:** Menangani %d paket mencurigakan dalam 5 menit terakhir. Kondisi stabil.\n", blocked)
+	} else {
+		res += "✅ **Parameter Optimal:** Tidak ada ancaman aktif yang terdeteksi dalam telemetri saat ini.\n"
+	}
+
+	if strings.Contains(q, "help") || strings.Contains(q, "bantu") {
+		res += "\nAnda dapat menanyakan tentang 'status trafik', 'serangan aktif', atau 'metode perlindungan' kami."
+	}
+
+	res += "\n\n*Catatan: Menggunakan analisis heuristik lokal karena AI Core (Ollama) sedang offline atau sinkronisasi.*"
 	return res
 }

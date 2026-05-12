@@ -27,6 +27,7 @@ import ThreatMapWidget from '@/components/ThreatMapWidget';
 import EmergencyAlarm from '@/components/EmergencyAlarm';
 import WindowFrame from '@/components/WindowFrame';
 import Taskbar from '@/components/Taskbar';
+import BootSequence from '@/components/BootSequence';
 
 // Type definitions
 export interface TelemetryLog {
@@ -174,6 +175,7 @@ const DesktopIcon = ({ id, label, icon: Icon, onClick, isOpen }: any) => (
 const NCCDashboard = () => {
   const [activeDomain, setActiveDomain] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBooting, setIsBooting] = useState(true);
   const [logLimit, setLogLimit] = useState<number>(10);
   
   const { logs, metrics, history, shufflerData, isLive } = useTelemetry(`http://localhost:8080/api/telemetry?domain=${activeDomain}`, 2000)
@@ -257,6 +259,9 @@ const NCCDashboard = () => {
 
   return (
     <div className={`relative min-h-screen bg-[#050608] text-gray-200 font-sans overflow-hidden transition-colors duration-1000 ${isEmergency ? 'shadow-[inset_0_0_150px_rgba(220,38,38,0.15)]' : ''}`}>
+      <AnimatePresence>
+        {isBooting && <BootSequence onComplete={() => setIsBooting(false)} />}
+      </AnimatePresence>
       
       {/* Background Layer: Quantum Glassmorphism */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden bg-[#050810]">

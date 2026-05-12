@@ -36,50 +36,89 @@ const WindowFrame: React.FC<WindowFrameProps> = ({
   isActive
 }) => {
   const [isMaximized, setIsMaximized] = useState(false);
+  const [size, setSize] = useState({ 
+    width: typeof width === 'number' ? width : parseInt(String(width)) || 600, 
+    height: typeof height === 'number' ? height : parseInt(String(height)) || 400 
+  });
+  const [isResizing, setIsResizing] = useState(false);
   const dragControls = useDragControls();
+  const windowRef = useRef<HTMLDivElement>(null);
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startWidth = size.width;
+    const startHeight = size.height;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const newWidth = Math.max(350, startWidth + (moveEvent.clientX - startX));
+      const newHeight = Math.max(250, startHeight + (moveEvent.clientY - startY));
+      setSize({ width: newWidth, height: newHeight });
+    };
+
+    const onMouseUp = () => {
+      setIsResizing(false);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
 
   if (isMinimized) return null;
 
   return (
     <motion.div
-      drag={!isMaximized}
+      ref={windowRef}
+      drag={!isMaximized && !isResizing}
       dragControls={dragControls}
       dragMomentum={false}
       dragListener={false}
-      dragConstraints={{ top: 0, left: 0, right: typeof window !== 'undefined' ? window.innerWidth - 150 : 1000, bottom: typeof window !== 'undefined' ? window.innerHeight - 100 : 800 }}
+      dragConstraints={{ top: 0, left: 0, right: typeof window !== 'undefined' ? window.innerWidth - 100 : 1000, bottom: typeof window !== 'undefined' ? window.innerHeight - 100 : 800 }}
       dragElastic={0}
       initial={{ opacity: 0, scale: 0.95, x: initialX, y: initialY }}
       animate={{ 
         opacity: 1, 
         scale: 1,
-        width: isMaximized ? "100vw" : width,
-        height: isMaximized ? "calc(100vh - 56px)" : height,
+        x: isMaximized ? 0 : undefined,
+        y: isMaximized ? 0 : undefined,
+        width: isMaximized ? "100vw" : size.width,
+        height: isMaximized ? "calc(100vh - 56px)" : size.height,
         zIndex: zIndex,
+        borderRadius: isMaximized ? "0px" : "12px",
         boxShadow: isActive 
           ? "0 25px 50px -12px rgba(59, 130, 246, 0.2), 0 0 20px rgba(59, 130, 246, 0.1)" 
           : "0 10px 15px -3px rgba(0, 0, 0, 0.4)"
       }}
       exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
       onMouseDown={onFocus}
-      className={`absolute flex flex-col bg-[#0c0f14]/95 backdrop-blur-2xl border rounded-xl overflow-hidden transition-colors duration-300 ${
+      className={`absolute flex flex-col bg-[#0c0f14]/95 backdrop-blur-3xl border transition-colors duration-300 ${
         isActive ? "border-blue-500/50" : "border-gray-800/80"
-      }`}
+      } ${isMaximized ? "z-[9999]" : ""}`}
       style={{
         position: isMaximized ? "fixed" : "absolute",
         top: isMaximized ? 0 : undefined,
         left: isMaximized ? 0 : undefined,
-        touchAction: "none" // Crucial for framer-motion drag
+        touchAction: "none"
       }}
     >
-      {/* Title Bar - Now acts as the drag handle */}
+      {/* Title Bar */}
       <div 
         className={`h-11 flex items-center justify-between px-4 cursor-grab active:cursor-grabbing select-none shrink-0 transition-colors ${
           isActive ? "bg-[#0f172a]" : "bg-[#090b0e]"
         } border-b border-white/5`}
         onPointerDown={(e) => {
-          dragControls.start(e);
-          onFocus();
+          if (!isMaximized) {
+            dragControls.start(e);
+            onFocus();
+          }
         }}
+        onDoubleClick={() => setIsMaximized(!isMaximized)}
       >
         <div className="flex items-center gap-3">
           <div className={`${isActive ? "text-blue-400" : "text-gray-500"} transition-colors`}>
@@ -94,8 +133,8 @@ const WindowFrame: React.FC<WindowFrameProps> = ({
 
         <div className="flex items-center gap-1.5" onPointerDown={e => e.stopPropagation()}>
           <button 
-            onClick={() => {/* minimize */}}
             className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white/5 text-gray-500 transition-all"
+            onClick={() => {/* minimize logic usually handled by parent */}}
           >
             <Minus size={14} />
           </button>
@@ -103,7 +142,13 @@ const WindowFrame: React.FC<WindowFrameProps> = ({
             onClick={() => setIsMaximized(!isMaximized)}
             className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white/5 text-gray-500 transition-all"
           >
-            <Square size={11} />
+            {isMaximized ? (
+              <div className="relative w-3 h-3 border border-current">
+                <div className="absolute -top-1 -right-1 w-2 h-2 border border-current bg-[#0c0f14]" />
+              </div>
+            ) : (
+              <Square size={11} />
+            )}
           </button>
           <button 
             onClick={onClose}
@@ -119,14 +164,18 @@ const WindowFrame: React.FC<WindowFrameProps> = ({
         {children}
       </div>
 
-      {/* Resize Handle (Visual Only for now) */}
+      {/* Resize Handle */}
       {!isMaximized && (
-        <div className="absolute bottom-1 right-1 w-3 h-3 opacity-20 pointer-events-none">
-          <div className="w-full h-full border-r-2 border-b-2 border-gray-400 rounded-br-sm" />
+        <div 
+          className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize group z-50"
+          onMouseDown={handleResizeStart}
+        >
+          <div className="absolute bottom-1.5 right-1.5 w-2.5 h-2.5 border-r-2 border-b-2 border-gray-600/50 group-hover:border-blue-500 transition-colors" />
         </div>
       )}
     </motion.div>
   );
 };
+
 
 export default WindowFrame;
