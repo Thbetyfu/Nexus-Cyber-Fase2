@@ -18,6 +18,26 @@ services:
       timeout: 5s
       retries: 5
 
+  # Relational Database (Forensic Persistence)
+  postgres:
+    image: postgres:15-alpine
+    container_name: nexus_postgres
+    environment:
+      POSTGRES_USER: nexus
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: nexus_cyber
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexus -d nexus_cyber"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
   # Core Gateway (Golang)
   gateway:
     build:
@@ -39,6 +59,8 @@ services:
       - .env
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -74,3 +96,4 @@ services:
 
 volumes:
   redis_data:
+  postgres_data:

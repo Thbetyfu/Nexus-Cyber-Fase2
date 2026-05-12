@@ -195,17 +195,13 @@ Respond ONLY with this JSON structure:
 
 // AnalyzeIntent is the legacy-compatible interface used by proxy_core.go.
 // It wraps AnalyzeEscalatedThreat with minimal context for backward compatibility.
-func (l *LlamaClient) AnalyzeIntent(payload string) (isMalicious bool, err error) {
+func (l *LlamaClient) AnalyzeIntent(payload string) (*LlamaForensicResult, error) {
 	ctx := AttackContext{
 		AttackHistory: []map[string]interface{}{},
 		ThreatIntel:   map[string]interface{}{},
 		SystemState:   SystemState{ActiveIncidents: 0, LastMTDShuffle: "unknown", CurrentAlertLevel: "NORMAL"},
 	}
-	result, err := l.AnalyzeEscalatedThreat(nil, payload, ctx)
-	if err != nil {
-		return false, err
-	}
-	return result.ThreatVerdict == "CONFIRMED_MALICIOUS" || result.ThreatVerdict == "ADVANCED_PERSISTENT", nil
+	return l.AnalyzeEscalatedThreat(nil, payload, ctx)
 }
 
 // ParseLlamaResponse parses OpenRouter output using 3-stage robust JSON parsing.

@@ -34,11 +34,10 @@ func NewReasoningEngine(url, model string) *ReasoningEngine {
 }
 
 // AnalyzeIntent is the main interface used by proxy_core.go.
-// Returns true if the AI judges the payload as malicious.
-// On any error (timeout, parse, API down) returns false (Fail-Open).
-func (re *ReasoningEngine) AnalyzeIntent(payload string) (isMalicious bool, err error) {
+// Returns the full forensic result from the AI.
+func (re *ReasoningEngine) AnalyzeIntent(payload string) (*LlamaForensicResult, error) {
 	if !re.Enabled {
-		return false, nil
+		return nil, fmt.Errorf("reasoning engine disabled")
 	}
 	return re.client.AnalyzeIntent(payload)
 }

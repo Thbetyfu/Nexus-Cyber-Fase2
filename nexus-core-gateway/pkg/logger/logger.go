@@ -10,7 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mssola/user_agent"
+	"github.com/nexus-cyber/nexus-core-gateway/internal/database"
+	"github.com/nexus-cyber/nexus-core-gateway/internal/models"
 )
 
 // TelemetryLog represents traffic metadata for Nexus Dashboard.
@@ -27,6 +30,7 @@ type TelemetryLog struct {
 	ThreatDetail      string    `json:"threat_detail,omitempty"`
 	TargetDomain      string    `json:"target_domain"` // Domain tracking for Multi-Tenancy
 	LatencyMS         int64     `json:"latency_ms"`
+	PayloadSample     string    `json:"payload_sample,omitempty"`
 }
 
 // AIEventLog records cognitive activities and self-repair actions
@@ -167,7 +171,10 @@ func (l *Logger) EnrichLog(log *TelemetryLog, r *http.Request) {
 	l.mu.Unlock()
 }
 
-func (l *Logger) LogTraffic(log TelemetryLog) {
+func (l *Logger) LogTraffic(log TelemetryLog) uuid.UUID {
+	// Generate UUID here so we can return it immediately
+	logID := uuid.New()
+
 	// Persistence (JSON Line standard)
 	data, _ := json.Marshal(log)
 	l.file.WriteString(string(data) + "\n")
@@ -217,6 +224,42 @@ func (l *Logger) LogTraffic(log TelemetryLog) {
 	// Console Log for Docker visibility
 	fmt.Printf("[NET-TRAFFIC] %s | %s | %s | %s -> %s | %dms\n",
 		log.Timestamp.Format("15:04:05"), log.Status, log.TargetDomain, log.SourceIP, log.Endpoint, log.LatencyMS)
+
+	// 4. Asynchronous Database Persistence (ISO 27001)
+	if database.DB != nil {
+		go func(l TelemetryLog) {
+			severity := 1
+			if l.Status == "BLOCKED" || l.Status == "RATE_LIMITED" {
+				severity = 3
+			}
+			if l.Status == "HONEYPOT_REDIRECTED" || l.Status == "DIVERTED_TO_HONEYPOT" {
+				severity = 4
+			}
+			if strings.Contains(strings.ToUpper(l.ThreatDetail), "SQL") || strings.Contains(strings.ToUpper(l.ThreatDetail), "XSS") {
+				severity = 5
+			}
+
+			dbLog := models.ThreatLog{
+				SourceIP:      l.SourceIP,
+				Endpoint:      l.Endpoint,
+				Method:        l.Method,
+				Status:        l.Status,
+				ThreatType:    l.ThreatDetail,
+				Severity:      severity,
+				UserAgent:     l.DeviceFingerprint, // Or the raw UA if available, we use DeviceFingerprint for now
+				LatencyMs:     int(l.LatencyMS),
+				PayloadSample: l.PayloadSample,
+			}
+			dbLog.ID = logID // Use the pre-generated ID
+			
+			// Try to insert
+			if err := database.DB.Create(&dbLog).Error; err != nil {
+				fmt.Printf("[DB-ERROR] Failed to save threat log: %v\n", err)
+			}
+		}(log) // Pass by value to avoid race conditions in loop
+	}
+
+	return logID
 }
 
 // GetRecentLogs returns a copy of the recent logs for the API.

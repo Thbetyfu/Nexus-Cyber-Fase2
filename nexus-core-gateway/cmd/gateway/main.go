@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/nexus-cyber/nexus-core-gateway/internal/ai"
+	"github.com/nexus-cyber/nexus-core-gateway/internal/database"
 	"github.com/nexus-cyber/nexus-core-gateway/internal/mtd"
 	"github.com/nexus-cyber/nexus-core-gateway/internal/proxy"
 	"github.com/nexus-cyber/nexus-core-gateway/pkg/logger"
@@ -42,8 +43,9 @@ func main() {
 	loadEnv()
 	fmt.Println("[NEXUS] NEXUS CYBER GATEWAY - ENTERPRISE PRODUCTION INITIALIZING...")
 
-	// 0. Initialize Distributed State (Redis via ISO-25010 Fallback)
+	// 0. Initialize Distributed State (Redis & Postgres)
 	mtd.InitRedis()
+	database.InitPostgres()
 
 	// 1. Initialize Intelligence Components
 	filter := ai.NewReflexFilter()

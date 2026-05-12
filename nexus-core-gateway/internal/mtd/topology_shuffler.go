@@ -7,6 +7,9 @@ import (
 	"math/big"
 	"sync"
 	"time"
+
+	"github.com/nexus-cyber/nexus-core-gateway/internal/database"
+	"github.com/nexus-cyber/nexus-core-gateway/internal/models"
 )
 
 // TargetBackend represents a proxying destination.
@@ -112,6 +115,19 @@ func (ts *TopologyShuffler) rotationLoop() {
 				go ts.onShuffle(newTarget) // async to not block rotation loop
 			}
 
+			// 3. PERSISTENCE: Log audit trail to Database (ISO 27001)
+			if database.DB != nil {
+				go func(o, n int) {
+					audit := models.MTDAuditTrail{
+						OldPort:       o,
+						NewPort:       n,
+						TriggerReason: "SCHEDULED_ROTATION",
+						Status:        "SUCCESS",
+					}
+					database.DB.Create(&audit)
+				}(oldPort, newPort)
+			}
+
 		case <-ts.stopCh:
 			log.Printf("[MTD] TopologyShuffler STOPPED.")
 			return
@@ -149,6 +165,19 @@ func (ts *TopologyShuffler) ManualShuffle() {
 
 	if ts.onShuffle != nil {
 		go ts.onShuffle(newTarget)
+	}
+
+	// PERSISTENCE: Log audit trail to Database (ISO 27001)
+	if database.DB != nil {
+		go func(o, n int) {
+			audit := models.MTDAuditTrail{
+				OldPort:       o,
+				NewPort:       n,
+				TriggerReason: "EMERGENCY_MANUAL_SHUFFLE",
+				Status:        "SUCCESS",
+			}
+			database.DB.Create(&audit)
+		}(oldPort, newPort)
 	}
 }
 

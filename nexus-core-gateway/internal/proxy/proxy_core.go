@@ -154,8 +154,6 @@ func (np *NexusProxy) getProxy() *httputil.ReverseProxy {
 }
 
 func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
-
 	// 1. Capture payload for analysis
 	var body []byte
 	if r.Body != nil {
@@ -203,19 +201,6 @@ func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		np.getProxy().ServeHTTP(w, r)
 		return
 	}
-
-	// 2. Multi-Tenant Traffic Tracking (ISO-25010 Compliance)
-	tLog := logger.TelemetryLog{
-		Timestamp:    time.Now(),
-		SourceIP:     r.RemoteAddr,
-		Endpoint:     r.URL.Path,
-		Method:       r.Method,
-		Status:       "ALLOWED",
-		TargetDomain: r.Host,
-		LatencyMS:    time.Since(start).Milliseconds(),
-	}
-	np.Logger.EnrichLog(&tLog, r)
-	np.Logger.LogTraffic(tLog)
 
 	// [NEW] Host normalization: Strip port if present (fixes localhost:8080 match)
 	host := r.Host

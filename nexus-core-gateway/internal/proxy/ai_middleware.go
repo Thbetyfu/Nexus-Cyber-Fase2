@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/nexus-cyber/nexus-core-gateway/internal/database"
 	"github.com/nexus-cyber/nexus-core-gateway/internal/mtd"
 	"github.com/nexus-cyber/nexus-core-gateway/pkg/logger"
 )
@@ -17,6 +19,32 @@ import (
 // including internal APIs. It triggers the OS Firewall for critical threats.
 func (np *NexusProxy) AIMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// [LAYER 0: INTEL BLACKLIST] Instant Drop for known malicious IPs
+		if database.IsIPBlacklisted(r.RemoteAddr) {
+			np.Logger.LogAIEvent(logger.AIEventLog{
+				Timestamp:    time.Now(),
+				Layer:        "Intel-Shield",
+				Status:       "BANNED_MATCH",
+				DetailAction: fmt.Sprintf("[ZERO TRUST] Instant Diversion - IP %s is in the persistent blacklist.", r.RemoteAddr),
+			})
+
+			tLog := logger.TelemetryLog{
+				Timestamp:    time.Now(),
+				SourceIP:     r.RemoteAddr,
+				Endpoint:     r.URL.Path,
+				Method:       r.Method,
+				Status:       "BANNED_IP_DIVERTED",
+				TargetDomain: r.Host,
+				ThreatDetail: "INTEL_BLACKLIST_HIT",
+			}
+			np.Logger.EnrichLog(&tLog, r)
+			np.Logger.LogTraffic(tLog)
+
+			np.PublishThreat(r.RemoteAddr, "BLACKLISTED_IP")
+			np.routeToHoneypot(w, r)
+			return
+		}
+
 		// Skip for Honeypot itself to avoid loops
 		if r.URL.Path == "/api/verify-session" {
 			next.ServeHTTP(w, r)
@@ -39,24 +67,28 @@ func (np *NexusProxy) AIMiddleware(next http.Handler) http.Handler {
 		query, _ := url.QueryUnescape(r.URL.RawQuery)
 		analysisData := query + " " + string(body)
 
-		if len(analysisData) > 5 {
-			fmt.Printf("[AI-INSPECT] Path: %s | Payload: %s\n", r.URL.Path, analysisData)
-		}
-
-		// [NEW: VIRTUAL PATCHING] Layer 0: Immunity Check (Local Antibodies Memory)
-		// O(1) time complexity — Instant Drop for already discovered malicious patterns.
+		// [NEW: VIRTUAL PATCHING] Immunity Check (Local Antibodies Memory)
 		isPatched := false
 		np.Patches.Range(func(key, value interface{}) bool {
 			pattern := key.(string)
 			if strings.Contains(analysisData, pattern) {
 				isPatched = true
-				return false // stop iteration
+				return false
 			}
 			return true
 		})
 
+		// Base Telemetry Log
+		tLog := logger.TelemetryLog{
+			Timestamp:     time.Now(),
+			SourceIP:      r.RemoteAddr,
+			Endpoint:      r.URL.Path,
+			Method:        r.Method,
+			TargetDomain:  r.Host,
+			PayloadSample: analysisData,
+		}
+
 		if isPatched {
-			// LOG VIRTUAL PATCH HIT
 			np.Logger.LogAIEvent(logger.AIEventLog{
 				Timestamp:    time.Now(),
 				Layer:        "Virtual-Patch",
@@ -64,106 +96,68 @@ func (np *NexusProxy) AIMiddleware(next http.Handler) http.Handler {
 				DetailAction: "[VIRTUAL PATCH] Instant Drop - Antibody Signature Match.",
 			})
 
-			// LOG TRAFFIC INCIDENT
-			tLog := logger.TelemetryLog{
-				Timestamp:    time.Now(),
-				SourceIP:     r.RemoteAddr,
-				Endpoint:     r.URL.Path,
-				Method:       r.Method,
-				Status:       "INSTANT_DROP_PATCH",
-				TargetDomain: r.Host,
-				ThreatDetail: "VIRTUAL_PATCH_MATCH",
-			}
+			tLog.Status = "INSTANT_DROP_PATCH"
+			tLog.ThreatDetail = "VIRTUAL_PATCH_MATCH"
+			np.Logger.EnrichLog(&tLog, r)
 			np.Logger.LogTraffic(tLog)
 
-			// MTD: Digital Hallucination (Honeypot Redirect)
 			np.PublishThreat(r.RemoteAddr, "VIRTUAL_PATCH_IMMUNE")
 			np.routeToHoneypot(w, r)
 			return
 		}
 
 		// 2. Dual-Brain Layer 1: Reflex
-		isThreat, threatType := np.Filter.InspectRequest(analysisData)
+		ua := r.Header.Get("User-Agent")
+		isThreat, threatType := np.Filter.InspectAdvanced(analysisData, ua)
 
 		if isThreat {
-			// [NEW: VIRTUAL PATCHING] Generate new antibody for this pattern
 			if len(analysisData) > 10 {
 				np.AddAntibody(analysisData)
-				np.Logger.LogAIEvent(logger.AIEventLog{
-					Timestamp:    time.Now(),
-					Layer:        "Virtual-Patch",
-					Status:       "ANTIBODY_GEN",
-					DetailAction: "[VIRTUAL PATCH] New signature generated and cached for future immunity.",
-				})
 			}
 
-			// LOG SECURITY INCIDENT
 			np.Logger.LogAIEvent(logger.AIEventLog{
 				Timestamp:    time.Now(),
 				Layer:        "Reflex",
 				Status:       "MITIGATING",
-				DetailAction: fmt.Sprintf("Critical Threat [%s] from %s. Triggering OS-Firewall...", threatType, r.RemoteAddr),
+				DetailAction: fmt.Sprintf("Critical Threat [%s] from %s.", threatType, r.RemoteAddr),
 			})
 
-			// LOG TRAFFIC INCIDENT
-			tLog := logger.TelemetryLog{
-				Timestamp:    time.Now(),
-				SourceIP:     r.RemoteAddr,
-				Endpoint:     r.URL.Path,
-				Method:       r.Method,
-				Status:       "DIVERTED_TO_HONEYPOT",
-				TargetDomain: r.Host,
-				ThreatDetail: threatType,
-			}
+			tLog.Status = "DIVERTED_TO_HONEYPOT"
+			tLog.ThreatDetail = threatType
+			np.Logger.EnrichLog(&tLog, r)
 			np.Logger.LogTraffic(tLog)
 
-			// TRIGGER OS FIREWALL (iptables) - Skip Dev Loopback for Safety
-			if !strings.HasPrefix(r.RemoteAddr, "127.0.0.1") && !strings.HasPrefix(r.RemoteAddr, "[::1]") {
-				if strings.Contains(threatType, "SQL_INJECTION") || strings.Contains(threatType, "DETECTED") {
-					go mtd.BlockIPAtOSLevel(r.RemoteAddr)
-				}
-			} else {
-				fmt.Printf("[ALER] Threat detected from LOCALHOST (%s). Kernel bypass enabled for Safety.\n", r.RemoteAddr)
-			}
-
-			// MTD: Digital Hallucination (Honeypot Redirect)
-			// [NEW: TACTICAL IP DETECTION] Focus on X-Forwarded-For for testing real geolocation
-			attackerIP := r.RemoteAddr
-			if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-				attackerIP = strings.Split(xff, ",")[0]
-			}
-			np.PublishThreat(attackerIP, threatType)
+			np.PublishThreat(r.RemoteAddr, threatType)
 			np.routeToHoneypot(w, r)
 			return
 		}
 
 		// 3. Dual-Brain Layer 2: Reasoning (Async Background Audit)
-		// We pass high-risk requests to the deep cognitive engine without blocking.
 		if len(analysisData) > 10 {
-			go func(data string, source string) {
-				isMalicious, _ := np.Reasoning.AnalyzeIntent(data)
-				if isMalicious {
-					mtd.BlockIPAtOSLevel(source)
+			tLog.Status = "ALLOWED"
+			tLog.ThreatDetail = "PASS_THROUGH_AI"
+			np.Logger.EnrichLog(&tLog, r)
+			logID := np.Logger.LogTraffic(tLog)
+
+			go func(data string, source string, id uuid.UUID) {
+				result, err := np.Reasoning.AnalyzeIntent(data)
+				if err == nil && result != nil {
+					// Persist AI reasoning to database
+					database.SaveAIInsight(id, "qwen/qwen3-235b-a22b", result.ForensicSummary, result.ThreatVerdict)
+
+					if result.ThreatVerdict == "CONFIRMED_MALICIOUS" || result.ThreatVerdict == "ADVANCED_PERSISTENT" {
+						mtd.BlockIPAtOSLevel(source)
+					}
 				}
-			}(analysisData, r.RemoteAddr)
+			}(analysisData, r.RemoteAddr, logID)
+		} else {
+			tLog.Status = "ALLOWED"
+			tLog.ThreatDetail = "PASS_THROUGH_AI"
+			np.Logger.EnrichLog(&tLog, r)
+			np.Logger.LogTraffic(tLog)
 		}
 
-		// [NEW: PQC SHIELD] Injecting Post-Quantum Cryptography Headers
-		// ML-KEM-768 (Kyber) is the NIST standard for quantum-resistant key exchange.
 		w.Header().Set("X-Quantum-Safe", "ML-KEM-768-Active")
-		w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
-
-		// 4. LOG NORMAL TRAFFIC for Dashboard Statistics
-		np.Logger.LogTraffic(logger.TelemetryLog{
-			Timestamp:    time.Now(),
-			SourceIP:     r.RemoteAddr,
-			Endpoint:     r.URL.Path,
-			Method:       r.Method,
-			Status:       "ALLOWED",
-			TargetDomain: r.Host,
-			ThreatDetail: "PASS_THROUGH_AI",
-		})
-
 		next.ServeHTTP(w, r)
 	})
 }
