@@ -73,3 +73,13 @@ type AIInsight struct {
 	AnalysisText      string    `gorm:"type:text"`         // Ulasan intensi peretas dan analisa APT
 	RecommendedAction string    `gorm:"type:varchar(255)"` // Mitigasi spesifik (misal: "BLOCK_IP")
 }
+
+// DomainSubscription memetakan tabel `domain_subscriptions` untuk kontrol lisensi SaaS WAF terpusat.
+type DomainSubscription struct {
+	Base
+	Domain   string `gorm:"type:varchar(255);uniqueIndex"`
+	OriginIP string `gorm:"type:varchar(255)"`
+	IsActive bool   `gorm:"type:boolean;default:true"`
+	PlanType string `gorm:"type:varchar(50);default:'premium'"`
+}
+

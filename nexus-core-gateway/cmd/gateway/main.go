@@ -46,6 +46,7 @@ func main() {
 	// 0. Initialize Distributed State (Redis & Postgres)
 	mtd.InitRedis()
 	database.InitPostgres()
+	proxy.SeedInitialDomainSubscriptions()
 
 	// 1. Initialize Intelligence Components
 	filter := ai.NewReflexFilter()

@@ -281,6 +281,8 @@ func cliExecuteHandler(telemetry *logger.Logger, shuffler *mtd.TopologyShuffler,
 				"  - shuffle               : Trigger manual topology rotation\n" +
 				"  - /ban [IP]             : Blacklist an attacker IP manually\n" +
 				"  - /unban [IP]           : Restore/unban an IP address\n" +
+				"  - /sub [domain]         : Activate premium SaaS PACS shield for a client\n" +
+				"  - /unsub [domain]       : Revoke license and lock a domain instantly\n" +
 				"  - /honeystats           : List active attackers trapped in Tarpit\n" +
 				"  - /patches              : Show dynamically loaded virtual patches\n" +
 				"  - /simulate-attack [lvl]: Launch active attack simulation (high/low)\n" +
@@ -342,6 +344,58 @@ func cliExecuteHandler(telemetry *logger.Logger, shuffler *mtd.TopologyShuffler,
 				DetailAction: fmt.Sprintf("[CLI-SHIELD] IP %s has been manually restored.", ipToUnban),
 			})
 			response = fmt.Sprintf("[SUCCESS] [SHIELD] IP %s successfully unbanned and restored.", ipToUnban)
+
+		case strings.HasPrefix(cmd, "sub ") || strings.HasPrefix(cmd, "/sub "):
+			parts := strings.Fields(payload.Command)
+			if len(parts) < 2 {
+				response = "[ERROR] Usage: /sub [domain]"
+				break
+			}
+			domainToSub := parts[1]
+			if database.DB != nil {
+				var sub models.DomainSubscription
+				err := database.DB.Where("domain = ?", domainToSub).First(&sub).Error
+				if err != nil {
+					sub = models.DomainSubscription{
+						Base:     models.Base{ID: uuid.New()},
+						Domain:   domainToSub,
+						OriginIP: "127.0.0.1",
+						IsActive: true,
+						PlanType: "premium",
+					}
+					database.DB.Create(&sub)
+				} else {
+					database.DB.Model(&sub).Update("is_active", true)
+				}
+			}
+			telemetry.LogAIEvent(logger.AIEventLog{
+				Timestamp:    time.Now(),
+				Layer:        "SaaS-WAF-Manager",
+				Status:       "LICENSE_ACTIVATED",
+				DetailAction: fmt.Sprintf("[SAAS] Domain %s activated. PACS Polymorphic Shield ACTIVE.", domainToSub),
+			})
+			response = fmt.Sprintf("[SUCCESS] [SAAS] Domain %s premium license successfully activated! PACS Shield active.", domainToSub)
+
+		case strings.HasPrefix(cmd, "unsub ") || strings.HasPrefix(cmd, "/unsub "):
+			parts := strings.Fields(payload.Command)
+			if len(parts) < 2 {
+				response = "[ERROR] Usage: /unsub [domain]"
+				break
+			}
+			domainToUnsub := parts[1]
+			if database.DB != nil {
+				database.DB.Model(&models.DomainSubscription{}).
+					Where("domain = ?", domainToUnsub).
+					Update("is_active", false)
+			}
+			telemetry.LogAIEvent(logger.AIEventLog{
+				Timestamp:    time.Now(),
+				Layer:        "SaaS-WAF-Manager",
+				Status:       "LICENSE_REVOKED",
+				DetailAction: fmt.Sprintf("[SAAS-ALERT] Domain %s license revoked! Copot/Shield deactivated.", domainToUnsub),
+			})
+			response = fmt.Sprintf("[WARNING] [SAAS] Domain %s license revoked! Shield deactivated, domain locked.", domainToUnsub)
+
 
 		case cmd == "honeystats" || cmd == "/honeystats":
 			response = "[HONEYPOT-STATUS] Captured Hackers in Sandbox Tarpit:\n" +

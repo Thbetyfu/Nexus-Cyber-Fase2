@@ -49,6 +49,8 @@ export default function AiTerminalWidget() {
         "/shuffle",
         "/ban ",
         "/unban ",
+        "/sub ",
+        "/unsub ",
         "/honeystats",
         "/patches",
         "/simulate-attack",

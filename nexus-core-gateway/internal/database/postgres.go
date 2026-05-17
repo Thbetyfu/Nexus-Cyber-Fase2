@@ -51,6 +51,7 @@ func InitPostgres() {
 		&models.MTDAuditTrail{},
 		&models.IntelBlacklist{},
 		&models.AIInsight{},
+		&models.DomainSubscription{},
 	)
 	if err != nil {
 		log.Fatalf("[DB-ERROR] Failed to run migrations: %v", err)

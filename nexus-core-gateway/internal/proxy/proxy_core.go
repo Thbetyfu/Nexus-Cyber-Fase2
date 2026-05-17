@@ -238,7 +238,7 @@ func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Eksekusi Proxying dinamis ke tujuan backend steril yang tepat.
+	// Eksekusi Proxying dinamis ke tujuan backend steril yang tepat dengan Enkripsi Transpilasi Polimorfik PACS.
 	remote, err := url.Parse(targetURL)
 	if err != nil {
 		http.Error(w, "INTERNAL_GATEWAY_ERROR: Invalid target configuration.", http.StatusInternalServerError)
@@ -246,6 +246,26 @@ func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dynProxy := httputil.NewSingleHostReverseProxy(remote)
+	dynProxy.ModifyResponse = func(resp *http.Response) error {
+		// Deteksi tipe konten HTML untuk pengacakan sandi visual (PACS)
+		contentType := resp.Header.Get("Content-Type")
+		if strings.Contains(contentType, "text/html") {
+			bodyBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+			resp.Body.Close()
+
+			// Jalankan transpilasi biner alien
+			obfuscated := ObfuscateHTML(string(bodyBytes), host)
+
+			resp.Body = io.NopCloser(strings.NewReader(obfuscated))
+			resp.ContentLength = int64(len(obfuscated))
+			resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(obfuscated)))
+		}
+		return nil
+	}
+
 	dynProxy.ServeHTTP(w, r)
 }
 
