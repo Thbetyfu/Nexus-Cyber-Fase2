@@ -16,11 +16,58 @@ interface AIEventLog {
     error?: string;
 }
 
+// Snappy super high-tech text typist effect
+const simulateStreamingText = (fullText: string, onUpdate: (currentText: string) => void, onComplete: () => void) => {
+    let index = 0;
+    let current = "";
+    const interval = setInterval(() => {
+        if (index < fullText.length) {
+            current += fullText[index];
+            onUpdate(current);
+            index++;
+        } else {
+            clearInterval(interval);
+            onComplete();
+        }
+    }, 12); // Snappy 12ms per char typing speed
+};
+
 export default function AiTerminalWidget() {
     const [aiStatus, setAiStatus] = useState({ state: "INITIALIZING", latency: 0, model: "QWEN3-CORE" });
     const [stream, setStream] = useState<AIEventLog[]>([]);
-    // Auto-scroll logic (Quiet internal scroll)
     const terminalRef = useRef<HTMLDivElement>(null);
+
+    // Dynamic autocomplete suggestion state
+    const [inputValue, setInputValue] = useState("");
+    const [commandHistory, setCommandHistory] = useState<string[]>([]);
+    const [historyIndex, setHistoryIndex] = useState(-1);
+    const [suggestions, setSuggestions] = useState<string[]>([]);
+
+    const allCommands = [
+        "/status",
+        "/stats",
+        "/shuffle",
+        "/ban ",
+        "/unban ",
+        "/honeystats",
+        "/patches",
+        "/simulate-attack",
+        "@nexus ",
+        "clear"
+    ];
+
+    // Filter autocomplete suggestions based on input
+    useEffect(() => {
+        const val = inputValue.trim();
+        if (val.startsWith("/") || val.startsWith("@") || val.length > 0) {
+            const filtered = allCommands.filter(c => 
+                c.toLowerCase().startsWith(val.toLowerCase()) && c.toLowerCase() !== val.toLowerCase()
+            );
+            setSuggestions(filtered);
+        } else {
+            setSuggestions([]);
+        }
+    }, [inputValue]);
 
     useEffect(() => {
         if (terminalRef.current) {
@@ -54,13 +101,13 @@ export default function AiTerminalWidget() {
             eventSource = new EventSource('http://localhost:8080/api/ai/stream');
 
             eventSource.onmessage = (e) => {
-                if (e.data === ': heartbeat') return; // Silent discard of backend heartbeats
+                if (e.data === ': heartbeat') return;
 
                 try {
                     const data = JSON.parse(e.data);
                     if (data.error) {
                         setStream(prev => [...prev, { timestamp: new Date().toISOString(), layer: "SYSTEM", status: "ERROR", detail_action: `> [ERROR] ${data.error}. Retrying...` }].slice(-50));
-                        return
+                        return;
                     }
 
                     let prefix = "";
@@ -74,12 +121,11 @@ export default function AiTerminalWidget() {
                         return [...prev.slice(-50), newMsg];
                     });
                 } catch (err) {
-                    // console.debug("SSE Heartbeat/Comment bypass", e.data);
+                    // silent discard
                 }
             };
 
             eventSource.onerror = (e) => {
-                // eventSource?.close(); // Let browser handle retry unless it's a hard failure
                 if (eventSource?.readyState === EventSource.CLOSED) {
                     setStream(prev => [...prev.slice(-50), { timestamp: new Date().toISOString(), layer: "SYSTEM", status: "ERROR", detail_action: "> [ERROR] Telemetry connection lost. Retrying in 5s..." }]);
                     reconnectTimeout = setTimeout(connectSSE, 5000);
@@ -94,10 +140,6 @@ export default function AiTerminalWidget() {
             clearTimeout(reconnectTimeout);
         };
     }, []);
-
-    const [inputValue, setInputValue] = useState("");
-    const [commandHistory, setCommandHistory] = useState<string[]>([]);
-    const [historyIndex, setHistoryIndex] = useState(-1);
 
     const handleCommandSubmit = async (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'ArrowUp') {
@@ -127,6 +169,7 @@ export default function AiTerminalWidget() {
             const cmd = inputValue.trim();
             setInputValue("");
             setHistoryIndex(-1);
+            setSuggestions([]);
             setCommandHistory(prev => [...prev, cmd].slice(-20));
 
             if (cmd.toLowerCase() === 'clear') {
@@ -134,7 +177,7 @@ export default function AiTerminalWidget() {
                 return;
             }
 
-            // Optimistic UI Append
+            // Optimistic UI Append with command feedback
             setStream(prev => {
                 const updated = [...prev.slice(-50), {
                     timestamp: new Date().toISOString(),
@@ -163,27 +206,62 @@ export default function AiTerminalWidget() {
 
                 if (res.ok) {
                     const data = await res.json();
+                    const rawOutput = data.output || data.response || "[EMPTY_RESPONSE]";
+
+                    // Check if we have a THINKING state to stream into
+                    let isThinkingMsg = false;
                     setStream(prev => {
                         const next = [...prev];
-                        // Find the last "THINKING" message and replace it
                         for (let i = next.length - 1; i >= 0; i--) {
                             if (next[i].status === "THINKING") {
+                                isThinkingMsg = true;
                                 next[i] = {
                                     ...next[i],
                                     status: "OK",
-                                    detail_action: data.output || data.response || "[EMPTY_RESPONSE]"
+                                    detail_action: "" // Cleared to prepare for letter typing
                                 };
                                 return next;
                             }
                         }
-                        // Fallback: Just append if no thinking message found
-                        return [...next.slice(-50), {
+                        return next;
+                    });
+
+                    if (isThinkingMsg) {
+                        simulateStreamingText(rawOutput, (currentText) => {
+                            setStream(prev => {
+                                const next = [...prev];
+                                for (let i = next.length - 1; i >= 0; i--) {
+                                    if (next[i].status === "OK" && next[i].layer === "Reasoning") {
+                                        next[i] = { ...next[i], detail_action: currentText };
+                                        break;
+                                    }
+                                }
+                                return next;
+                            });
+                        }, () => {});
+                    } else {
+                        // Regular CLI output - stream letter-by-letter as well
+                        const streamMsg = {
                             timestamp: new Date().toISOString(),
                             layer: "System",
                             status: "OK",
-                            detail_action: data.output || data.response || "[EMPTY_RESPONSE]"
-                        }];
-                    });
+                            detail_action: ""
+                        };
+                        setStream(prev => [...prev.slice(-50), streamMsg]);
+
+                        simulateStreamingText(rawOutput, (currentText) => {
+                            setStream(prev => {
+                                const next = [...prev];
+                                if (next.length > 0) {
+                                    next[next.length - 1] = {
+                                        ...next[next.length - 1],
+                                        detail_action: currentText
+                                    };
+                                }
+                                return next;
+                            });
+                        }, () => {});
+                    }
                 } else {
                     setStream(prev => {
                         const next = prev.filter(item => item.status !== 'THINKING');
@@ -235,13 +313,14 @@ export default function AiTerminalWidget() {
                                 AI CORE: DISCONNECTED
                             </span>
                         </>
-                    )}
+                    )
+                    }
                 </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-black font-mono" ref={terminalRef}>
                 <div className="flex flex-col gap-1 w-full text-[11px] leading-relaxed">
                     <div className="text-cyan-600 mb-2 whitespace-pre font-black leading-none tracking-tighter">
-                        {`N EX US   C O R E   O S   v7.0`}
+                        {`N EX US   C O R E   O S   v7.2`}
                     </div>
                     <div className="text-cyan-500/50 mb-4">{`> Loading secure cognitive streams...`}</div>
 
@@ -258,6 +337,27 @@ export default function AiTerminalWidget() {
                             </span>
                         </div>
                     ))}
+
+                    {/* Suggestions Box Overlay */}
+                    {suggestions.length > 0 && (
+                        <div className="bg-[#05080c] border border-cyan-800/40 rounded-lg p-2 mt-3 mb-1 flex flex-col gap-1 text-[10px] text-cyan-400/80 animate-pulse font-mono shadow-[0_0_10px_rgba(6,182,212,0.1)] w-fit max-w-xs">
+                            <div className="text-cyan-500 font-bold border-b border-cyan-900/30 pb-0.5 mb-1 uppercase tracking-wider text-[9px]">
+                                Command Suggestions:
+                            </div>
+                            {suggestions.map((item, i) => (
+                                <div 
+                                    key={i} 
+                                    className="cursor-pointer hover:bg-cyan-950/40 hover:text-cyan-300 px-2 py-0.5 rounded transition-colors"
+                                    onClick={() => {
+                                        setInputValue(item);
+                                        setSuggestions([]);
+                                    }}
+                                >
+                                    {item}
+                                </div>
+                            ))}
+                        </div>
+                    )}
 
                     <div className="flex items-center mt-2 group">
                         <span className="text-emerald-500 shrink-0 mr-2 font-bold tracking-tighter">nexus_admin@soc:~$</span>

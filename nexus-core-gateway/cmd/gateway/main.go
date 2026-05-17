@@ -85,6 +85,14 @@ func main() {
 	// 3. MTD: Digital Hallucination Honeypot
 	// Runs on :9090, stalls attackers for 8 seconds, fully isolated
 	honeypot := mtd.NewHoneypot(":9090", 8*time.Second)
+	honeypot.OnAttackerCaught = func(ip string, path string, ua string) {
+		telemetry.LogAIEvent(logger.AIEventLog{
+			Timestamp:    time.Now(),
+			Layer:        "Honeypot-Trap",
+			Status:       "ATTACKER_TRAPPED",
+			DetailAction: fmt.Sprintf("[TRAPPED] Attacker from %s caught in Honeypot on path %s. UA: %s", ip, path, ua),
+		})
+	}
 	honeypot.Start()
 
 	// 4. Setup Initial Backend Target (Mockup OJK Data Center)

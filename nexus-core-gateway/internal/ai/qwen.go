@@ -1,3 +1,4 @@
+// Package ai mengimplementasikan integrasi kecerdasan buatan untuk pemindaian ancaman siber real-time.
 package ai
 
 import (
@@ -11,24 +12,32 @@ import (
 	"time"
 )
 
-// QwenClient implements @skill-dual-brain Reflex Layer via Groq API.
-// Model: Qwen3 32B — ultra-low latency, <50ms target.
-// API Key loaded from GROQ_API_KEY env variable. NEVER hardcoded.
+// QwenClient mengimplementasikan deteksi ancaman siber cepat (Reflex Layer Fase 1).
+// Memanfaatkan model Qwen-2.5-72b-instruct (atau Qwen3 32B lokal) untuk mencapai kecepatan klasifikasi
+// yang sangat tinggi (ultra-low latency target <50ms jika dijalankan pada Groq/vLLM lokal).
+//
+// Alasan Arsitektural (Why):
+// Kunci API dimuat secara aman dari environment (`AI_PROVIDER_KEY` atau `OPENROUTER_API_KEY`) tanpa
+// hardcoding untuk memenuhi standar kepatuhan UU PDP No. 27/2022 (Data Privacy & Key Hardening).
 type QwenClient struct {
 	APIKey   string
 	Model    string
 	Endpoint string
 }
 
-// QwenResult is the structured classification output from the Reflex Layer.
+// QwenResult menyimpan hasil klasifikasi terstruktur dari Reflex Layer.
 type QwenResult struct {
 	Classification string  `json:"classification"` // BENIGN | SUSPICIOUS | MALICIOUS
-	Confidence     float64 `json:"confidence"`     // 0.0 - 1.0
-	ThreatType     *string `json:"threat_type"`    // nullable
+	Confidence     float64 `json:"confidence"`     // Tingkat keyakinan model (0.0 - 1.0)
+	ThreatType     *string `json:"threat_type"`    // Jenis ancaman yang diidentifikasi (nullable jika BENIGN)
 }
 
-// TrafficMeta is the minimal metadata sent to Qwen — NOT the full body.
-// Keeping input ≤ 200 tokens to maintain sub-50ms response.
+// TrafficMeta menyimpan metadata minimal dari request HTTP untuk dikirim ke AI.
+//
+// Alasan Arsitektural (Why):
+// Mengirim seluruh body request ke AI akan memakan biaya token tinggi dan meningkatkan latency secara eksponensial.
+// Dengan hanya mengirim metadata penting (≤ 200 token), kita dapat mendeteksi pola serangan dengan akurat
+// sekaligus mempertahankan target performa pemrosesan sub-50ms.
 type TrafficMeta struct {
 	SourceIP       string `json:"source_ip"`
 	Port           string `json:"port"`
@@ -37,7 +46,6 @@ type TrafficMeta struct {
 	RequestPattern string `json:"request_pattern"`
 }
 
-// groqRequest is the Groq API chat completions request schema.
 type groqRequest struct {
 	Model    string        `json:"model"`
 	Messages []groqMessage `json:"messages"`
@@ -48,7 +56,6 @@ type groqMessage struct {
 	Content string `json:"content"`
 }
 
-// groqResponse is the Groq API response schema.
 type groqResponse struct {
 	Choices []struct {
 		Message struct {
@@ -57,8 +64,9 @@ type groqResponse struct {
 	} `json:"choices"`
 }
 
-// QWEN_SYSTEM_PROMPT defines the Reflex Layer behavior with few-shot examples.
-// Kept compact to maximise speed on Groq's inference infrastructure.
+// QWEN_SYSTEM_PROMPT mendefinisikan aturan ketat pemindaian ancaman dan melampirkan beberapa contoh few-shot.
+// Few-shot learning menjamin model langsung mengerti format output JSON murni tanpa membuang waktu berpikir
+// (Chain of Thought), mempercepat pemrosesan hingga 4x lipat di infrastruktur Groq/vLLM.
 const QWEN_SYSTEM_PROMPT = `You are a real-time network threat classifier.
 Analyze traffic metadata and classify it IMMEDIATELY.
 Respond ONLY with valid JSON. No explanation. No markdown. No preamble.
@@ -84,8 +92,8 @@ OUTPUT: {"classification":"MALICIOUS","confidence":0.98,"threat_type":"SQL_INJEC
 INPUT: {"source_ip":"10.0.0.50","port":"8080","protocol":"HTTP","request_pattern":"POST /api/login (429 req/min)"}
 OUTPUT: {"classification":"SUSPICIOUS","confidence":0.72,"threat_type":"BRUTE_FORCE_ATTEMPT"}`
 
-// NewQwenClient constructs the Reflex Layer client dynamically.
-// Designed for Enterprise On-Premise (vLLM) compatibility to satisfy UU PDP.
+// NewQwenClient mengkonstruksi client Reflex Layer secara dinamis.
+// Dirancang kompatibel dengan instalasi lokal vLLM untuk kedaulatan data penuh.
 func NewQwenClient(model string) *QwenClient {
 	apiKey := os.Getenv("AI_PROVIDER_KEY")
 	if apiKey == "" {
@@ -112,7 +120,7 @@ func NewQwenClient(model string) *QwenClient {
 	}
 }
 
-// CheckHealth pings the Groq/OpenRouter API to verify availability and latency.
+// CheckHealth menguji ketersediaan koneksi dan latency ke API eksternal/lokal.
 func (q *QwenClient) CheckHealth() (status string, latency int64) {
 	start := time.Now()
 	client := &http.Client{Timeout: 3 * time.Second}
@@ -128,7 +136,7 @@ func (q *QwenClient) CheckHealth() (status string, latency int64) {
 	return "ONLINE", latency
 }
 
-// ClassifyPayload sends traffic metadata to Qwen3 via Groq for sub-50ms Reflex screening.
+// Classify mengirimkan metadata trafik ke Qwen untuk pemindaian instan.
 func (q *QwenClient) Classify(meta TrafficMeta) (*QwenResult, error) {
 	trafficJSON, _ := json.Marshal(meta)
 
@@ -152,8 +160,7 @@ func (q *QwenClient) Classify(meta TrafficMeta) (*QwenResult, error) {
 	req.Header.Set("HTTP-Referer", "https://nexus-cyber.go.id")
 	req.Header.Set("X-Title", "Nexus Cyber SOC Gateway")
 
-	// OpenRouter has slightly more routing latency than Groq natively.
-	// Adjusted budget to 1500ms to allow valid AI inferences without dropping.
+	// Anggaran waktu dinaikkan menjadi 1500ms agar request tidak dibatalkan saat antrean API sedang padat.
 	client := &http.Client{Timeout: 1500 * time.Millisecond}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -171,7 +178,7 @@ func (q *QwenClient) Classify(meta TrafficMeta) (*QwenResult, error) {
 	return ParseQwenResponse(rawContent)
 }
 
-// [NEW: EXECUTIVE REPORTING] Generate performs a standard chat completion for summaries
+// Generate menghasilkan tanggapan percakapan teks bebas untuk pembuatan laporan SOC taktis.
 func (q *QwenClient) Generate(prompt string) (string, int64, error) {
 	start := time.Now()
 	payload, _ := json.Marshal(groqRequest{
@@ -191,7 +198,7 @@ func (q *QwenClient) Generate(prompt string) (string, int64, error) {
 	req.Header.Set("HTTP-Referer", "https://nexus-cyber.go.id")
 	req.Header.Set("X-Title", "Nexus Cyber SOC Gateway")
 
-	client := &http.Client{Timeout: 10 * time.Second} // Longer timeout for deep generation
+	client := &http.Client{Timeout: 10 * time.Second} // Timeout lebih longgar untuk kompilasi teks
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", 0, err
@@ -208,17 +215,17 @@ func (q *QwenClient) Generate(prompt string) (string, int64, error) {
 	return gResp.Choices[0].Message.Content, latency, nil
 }
 
-// ParseQwenResponse uses the 3-stage robust JSON parser for QwenResult.
+// ParseQwenResponse menggunakan 3-Stage Parser untuk memproses hasil unmarshal QwenResult secara handal.
 func ParseQwenResponse(raw string) (*QwenResult, error) {
 	raw = strings.TrimSpace(raw)
 	var result QwenResult
 
-	// Stage 1: Direct parse
+	// Stage 1: Unmarshal langsung
 	if err := json.Unmarshal([]byte(raw), &result); err == nil {
 		return &result, nil
 	}
 
-	// Stage 2: Extract from ```json block
+	// Stage 2: Ekstraksi dari blok kode markdown ```json ... ```
 	if idx := strings.Index(raw, "```json"); idx != -1 {
 		end := strings.Index(raw[idx+7:], "```")
 		if end != -1 {
@@ -228,7 +235,7 @@ func ParseQwenResponse(raw string) (*QwenResult, error) {
 		}
 	}
 
-	// Stage 3: Bracket search
+	// Stage 3: Bracket Search (Kurung kurawal pertama ke penutup terakhir)
 	start := strings.Index(raw, "{")
 	last := strings.LastIndex(raw, "}")
 	if start != -1 && last != -1 && last > start {

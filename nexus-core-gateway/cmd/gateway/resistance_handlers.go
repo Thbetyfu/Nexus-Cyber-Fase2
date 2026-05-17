@@ -33,6 +33,7 @@ func getCleanIP(remoteAddr string) string {
 // uploadShieldHandler intercepts image uploads, inspects magic bytes,
 // sanitizes steganography/EXIF data via AVSE, and forwards the clean file.
 func uploadShieldHandler(px *proxy.NexusProxy, telemetry *logger.Logger) http.HandlerFunc {
+	_ = px
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 

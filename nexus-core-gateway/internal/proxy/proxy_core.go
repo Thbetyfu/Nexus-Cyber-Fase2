@@ -1,3 +1,4 @@
+// Package proxy mengimplementasikan gateway proxy reverse otonom dengan kecerdasan MTD.
 package proxy
 
 import (
@@ -21,24 +22,37 @@ import (
 	"github.com/nexus-cyber/nexus-core-gateway/pkg/logger"
 )
 
-// NexusProxy implements the core @skill-mtd and @skill-dual-brain gateway.
-// Phase 5: MTD-aware proxy with Honeypot routing, Token Bucket, and shuffled backends.
+// NexusProxy adalah inti penggerak dari gerbang pertahanan siber otonom (SOC Gateway).
+//
+// Alasan Arsitektural (Why):
+// NexusProxy bertindak sebagai mediator pusat (Mediator Pattern) yang mengkoordinasikan MTD (Moving Target Defense),
+// sistem kecerdasan buatan berlapis Dual-Brain, dan pembersihan visual AVSE.
+// Modul ini dirancang agar tahan terhadap beban trafik tinggi (High Throughput) dengan tingkat ketersediaan tinggi
+// (High Availability) sesuai parameter ISO 25010.
 type NexusProxy struct {
-	// atomic pointer to current reverse proxy — updated on MTD shuffle
+	// Pointer atomik ke reverse proxy aktif untuk memfasilitasi rotasi port Lock-Free.
 	proxyPtr  unsafe.Pointer
 	Filter    *ai.ReflexFilter
 	Reasoning *ai.ReasoningEngine
 	Logger    *logger.Logger
 	Honeypot  *mtd.HoneypotServer
 	Shuffler  *mtd.TopologyShuffler
-	Router    *DynamicRouter // Dynamic multi-host routing engine
-	// [NEW: VIRTUAL PATCHING] Memory-Resident Antibodies for instant O(1) blocking
+	Router    *DynamicRouter // Router multi-host dinamis terdistribusi
+	
+	// Peta antibodi (virtual patches) resident memori untuk pencocokan instan O(1)
 	Patches      sync.Map
 	PatchesCount int32
-	// [NEW: THREAT MAP] Internal hub for live visualization in Local Mode
-	ThreatListeners sync.Map // Map[string]chan string for multi-client SSE fan-out
+	
+	// SSE Multi-client Fan-Out untuk visualisasi real-time 3D di dasbor Command Center
+	ThreatListeners sync.Map
 }
 
+// NewNexusProxy mengonstruksi gerbang pertahanan NexusProxy.
+//
+// Alasan Teknis (Why):
+// Menggunakan penunjuk atomik (Atomic Pointer Store) untuk menginisialisasi target awal.
+// Menyinkronkan entri pemetaan domain dasar (`localhost`, `ojk.localhost`) secara asinkron ke Redis,
+// serta menyalakan modul sinkronisasi antibodi otomatis.
 func NewNexusProxy(
 	target string,
 	filter *ai.ReflexFilter,
@@ -60,23 +74,24 @@ func NewNexusProxy(
 		Logger:    log,
 		Honeypot:  honeypot,
 		Shuffler:  shuffler,
-		Router:    NewDynamicRouter(10 * time.Second), // 10s local cache TTL
+		Router:    NewDynamicRouter(10 * time.Second), // Cache TTL lokal 10 detik
 	}
 	atomic.StorePointer(&np.proxyPtr, unsafe.Pointer(initialProxy))
 
-	// Pre-load current target to Redis for dynamic routing consistency
+	// Inisialisasi rute standard di tabel dinamis.
 	np.Router.AddRoute("localhost", target)
 	np.Router.AddRoute("ojk.localhost", target)
 	np.Router.AddRoute("kemenkeu.localhost", target)
 	np.Router.AddRoute("bi.localhost", target)
-	// [NEW: VIRTUAL PATCHING] Activate background antibody synchronization
+	
+	// Jalankan sinkronisasi background antibodi imun.
 	np.StartImmunitySync()
 
 	return np, nil
 }
 
-// [NEW: VIRTUAL PATCHING] StartImmunitySync initiates the background autonomous sync
-// from Redis. This ensures antibodies created on one gateway node are shared instantly.
+// StartImmunitySync menginisialisasi goroutine latar belakang untuk menarik berkas antibodi (virtual patches) dari Redis.
+// Menjamin setiap node gateway Nexus saling berbagi ilmu pertahanan secara instan (Global Immunity Sync).
 func (np *NexusProxy) StartImmunitySync() {
 	if mtd.MtdRedis == nil || !mtd.MtdRedis.Enabled {
 		return
@@ -86,10 +101,8 @@ func (np *NexusProxy) StartImmunitySync() {
 	go func() {
 		ctx := context.Background()
 		for range ticker.C {
-			// Pull "nexus:virtual_patches" from Redis Set
 			patches, err := mtd.MtdRedis.Client.SMembers(ctx, "nexus:virtual_patches").Result()
 			if err == nil {
-				// Atomic update of the local antibody map
 				var count int32
 				for _, p := range patches {
 					np.Patches.Store(p, true)
@@ -101,13 +114,13 @@ func (np *NexusProxy) StartImmunitySync() {
 	}()
 }
 
-// [NEW: VIRTUAL PATCHING] AddAntibody caches a malicious pattern for instant blocking
+// AddAntibody mendaftarkan pola serangan siber mencurigakan ke database memori lokal dan Redis terdistribusi.
 func (np *NexusProxy) AddAntibody(payload string) {
-	// 1. Local Cache Insert (Sub-millisecond protection)
+	// 1. Sisipkan ke cache lokal (O(1) protection) untuk proteksi instan sub-milidetik.
 	np.Patches.Store(payload, true)
 	atomic.AddInt32(&np.PatchesCount, 1)
 
-	// 2. Global Persistence Sync (Share with other Nexus Gateways)
+	// 2. Publikasikan secara asinkron ke server kluster Redis.
 	if mtd.MtdRedis != nil && mtd.MtdRedis.Enabled {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -117,19 +130,16 @@ func (np *NexusProxy) AddAntibody(payload string) {
 	}
 }
 
-// UpdateTarget atomically swaps the reverse proxy to a new backend.
-// This is the Graceful Handoff mechanism — in-flight requests on old proxy
-// complete normally; new requests go to the new target.
-// ResetAntibodies clears all learned malicious patterns (Virtual Patches)
+// ResetAntibodies membersihkan seluruh memori antibodi lokal dan Redis (System Wiping / Reset).
 func (np *NexusProxy) ResetAntibodies() {
-	// 1. Local Cache Purge
+	// 1. Bersihkan RAM lokal
 	np.Patches.Range(func(key, value interface{}) bool {
 		np.Patches.Delete(key)
 		return true
 	})
 	atomic.StoreInt32(&np.PatchesCount, 0)
 
-	// 2. Global Persistence Wipe (Redis)
+	// 2. Bersihkan Redis
 	if mtd.MtdRedis != nil && mtd.MtdRedis.Enabled {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -138,6 +148,13 @@ func (np *NexusProxy) ResetAntibodies() {
 	fmt.Println("[SYSTEM-RESET] Virtual Patch Antibody database purged.")
 }
 
+// UpdateTarget menukar target reverse proxy secara dinamis tanpa mengganggu request yang sedang berjalan.
+//
+// Alasan Arsitektural (Why):
+// Mekanisme pertukaran target Lock-Free (Graceful Handoff).
+// Menggunakan operasi penunjuk atomik (Atomic Store) untuk mengarahkan request HTTP baru ke port backend MTD yang baru
+// secara instan, sementara request lama yang sedang diproses di proxy lama tetap dibiarkan selesai secara normal.
+// Ini menjamin pemotongan (switching) port tidak mengakibatkan kegagalan paket trafik (Zero Packet Loss).
 func (np *NexusProxy) UpdateTarget(newTarget string) error {
 	remote, err := url.Parse(newTarget)
 	if err != nil {
@@ -148,25 +165,29 @@ func (np *NexusProxy) UpdateTarget(newTarget string) error {
 	return nil
 }
 
-// getProxy returns the currently active reverse proxy (thread-safe via atomic pointer).
+// getProxy membaca reverse proxy yang sedang aktif secara thread-safe menggunakan Atomic Load.
 func (np *NexusProxy) getProxy() *httputil.ReverseProxy {
 	return (*httputil.ReverseProxy)(atomic.LoadPointer(&np.proxyPtr))
 }
 
+// ServeHTTP adalah pintu masuk utama seluruh paket data HTTP yang melintasi gerbang proxy.
 func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// 1. Capture payload for analysis
+	// 1. Capture payload dan bersihkan malware visual via AVSE.
 	var body []byte
 	if r.Body != nil {
 		body, _ = io.ReadAll(r.Body)
 		
-		// [AVSE - PHASE 1 INTEGRATION]
-		// Cek apakah request ini berisi gambar
+		// [AVSE - INTELLIGENT MULTIMEDIA FILTERING]
+		// Alasan Keamanan (Why):
+		// Peretas sering menyisipkan malware biner di dalam berkas gambar JPEG/PNG (steganografi).
+		// Gateway mendeteksi tipe konten gambar dan mengirimkannya ke `avse.SanitizeImage` untuk kompresi ulang
+		// biner steril, menghancurkan payload eksploitasi visual tanpa merusak estetika gambar asli.
 		contentType := r.Header.Get("Content-Type")
 		if strings.HasPrefix(contentType, "image/jpeg") || strings.HasPrefix(contentType, "image/png") {
 			cleanResult, err := avse.SanitizeImage(body)
 			if err != nil {
-				// [PHASE 4: ANTI-BOMB PROTECTION]
-				// Jika gambar terlalu besar atau rusak, blokir demi keamanan server
+				// [ANTI-IMAGE BOMB PROTECTION]
+				// Blokir seketika jika struktur gambar rusak atau resolusi melampaui batas Megapiksel wajar.
 				np.Logger.LogAIEvent(logger.AIEventLog{
 					Layer:        "AVSE (Visual Shield)",
 					Status:       "BLOCKED",
@@ -176,10 +197,9 @@ func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			
-			// Gunakan data yang sudah dicuci
+			// Ganti body request dengan byte gambar steril yang telah dibersihkan.
 			body = cleanResult.Data
 			
-			// Log ke Dashboard (Fase 3: Risk Reporting)
 			status := "SANITIZED"
 			if cleanResult.RiskScore > 70 {
 				status = "THREAT_CLEANED"
@@ -195,41 +215,41 @@ func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r.Body = io.NopCloser(bytes.NewBuffer(body))
 	}
 
-	// SECURITY BYPASS: Jangan memfilter internal API (Dashboard & NECHAT)
-	// Kita tidak ingin admin diblokir saat mendiskusikan "SQL Injection" dengan AI.
+	// [BYPASS INTERNAL CHAT APIS]
+	// Alasan Teknis (Why):
+	// Diskusi admin dengan modul asisten AI mengenai celah SQLi/XSS tidak boleh disaring atau disanitasi oleh gateway,
+	// karena akan menyebabkan kegagalan respon chat admin (False Positive Lockout).
 	if len(r.URL.Path) >= 5 && r.URL.Path[:5] == "/api/" {
 		np.getProxy().ServeHTTP(w, r)
 		return
 	}
 
-	// [NEW] Host normalization: Strip port if present (fixes localhost:8080 match)
+	// Normalisasi Domain (Potong port pemanggil untuk pencocokan tabel router)
 	host := r.Host
 	if strings.Contains(host, ":") {
 		host = strings.Split(host, ":")[0]
 	}
 
+	// Cari pemetaan domain ke backend steril otonom.
 	targetURL, found := np.Router.Lookup(host)
 	if !found {
-		// Domain not protected, return 404
 		fmt.Printf("[NEXUS] ROUTING_ERROR: Host '%s' (normalized: '%s') not found in dynamic router table.\n", r.Host, host)
 		http.Error(w, fmt.Sprintf("NEXUS [404]: Domain '%s' is not protected by this matrix.", host), http.StatusNotFound)
 		return
 	}
 
-	// Dynamic proxying to the discovered target
+	// Eksekusi Proxying dinamis ke tujuan backend steril yang tepat.
 	remote, err := url.Parse(targetURL)
 	if err != nil {
 		http.Error(w, "INTERNAL_GATEWAY_ERROR: Invalid target configuration.", http.StatusInternalServerError)
 		return
 	}
 
-	// Create a new proxy for the specific target
-	// IMPROVEMENT: In the future, we can pool these or cache them in RouteEntry
 	dynProxy := httputil.NewSingleHostReverseProxy(remote)
 	dynProxy.ServeHTTP(w, r)
 }
 
-// [NEW: THREAT MAP] ThreatData represents a visual attack event for the 3D map
+// ThreatData merepresentasikan skema koordinat geografis serangan siber untuk peta ancaman 3D (3D Threat Map).
 type ThreatData struct {
 	ID         string  `json:"id"`
 	AttackerIP string  `json:"attacker_ip"`
@@ -240,21 +260,27 @@ type ThreatData struct {
 	Type       string  `json:"type"`
 }
 
-// PublishThreat broadcasts a threat event with real IP tracking or simulation fallback
+// PublishThreat mempublikasikan visualisasi serangan siber otonom secara global dan real-time.
+//
+// Alasan Arsitektural (Why):
+// - Menggunakan pelacakan IP Geografis real-time via API eksternal (ip-api.com) jika IP bersifat publik.
+// - Menyediakan simulasi koordinat acak real-time berkoordinat negara peretas (China, Rusia, USA, Singapura, Jerman)
+//   jika sistem berjalan secara offline (Local Host Mode), menjaga kemeriahan visualisasi Command Center (NCC).
+// - Mengirim data serangan ke kluster Redis Pub/Sub untuk sinkronisasi multi-dashboard,
+//   serta menyiarkan acara (broadcast) secara aman ke Map Listener SSE internal tanpa penundaan (sub-milidetik latency).
 func (np *NexusProxy) PublishThreat(ip string, threatType string) {
 	var lat, lng float64
 	sourceName := "SIMULATED_VEC"
 
-	// 🛰️ REAL-IP SATELLITE TRACE
 	cleanIP := ip
 	if strings.Contains(ip, ":") {
-		cleanIP = strings.Split(ip, ":")[0] // Strip port
+		cleanIP = strings.Split(ip, ":")[0]
 	}
 
 	isLocal := cleanIP == "127.0.0.1" || cleanIP == "::1" || cleanIP == "localhost"
 
 	if !isLocal {
-		// Attempt to resolve real Location via Geo-API
+		// Panggilan pelacakan lokasi IP publik
 		resp, err := http.Get("http://ip-api.com/json/" + cleanIP)
 		if err == nil {
 			defer resp.Body.Close()
@@ -271,7 +297,7 @@ func (np *NexusProxy) PublishThreat(ip string, threatType string) {
 		}
 	}
 
-	// 🛡️ FALLBACK TO WAR-ROOM SIMULATION (If Local or API Failed)
+	// Fallback koordinat kota besar penyerang untuk war-room simulation lokal.
 	if lat == 0 {
 		sources := [][]float64{
 			{55.75, 37.61}, {39.90, 116.40}, {38.90, -77.03}, {51.50, -0.12},
@@ -282,15 +308,15 @@ func (np *NexusProxy) PublishThreat(ip string, threatType string) {
 		lat, lng = src[0], src[1]
 	}
 
-	// 🔵 DYNAMIC TARGET LOCALIZATION (Nexus Sentinel Hub)
-	targetLat, targetLng := -6.20, 106.81 // Default: Jakarta
-	domain := strings.ToLower(threatType) // This is a bit dirty, let's use a mapping logic later
+	// Lokalisasi titik target Nexus (default: Jakarta)
+	targetLat, targetLng := -6.20, 106.81
+	domain := strings.ToLower(threatType)
 	if strings.Contains(domain, "portal") {
-		targetLat, targetLng = 1.35, 103.81 // Singapore
+		targetLat, targetLng = 1.35, 103.81 // Target Singapura
 	} else if strings.Contains(domain, "audit") {
-		targetLat, targetLng = -33.86, 151.20 // Sydney
+		targetLat, targetLng = -33.86, 151.20 // Target Sydney
 	} else if strings.Contains(domain, "cloud") {
-		targetLat, targetLng = 50.11, 8.68 // Frankfurt
+		targetLat, targetLng = 50.11, 8.68 // Target Frankfurt
 	}
 
 	threat := ThreatData{
@@ -306,13 +332,13 @@ func (np *NexusProxy) PublishThreat(ip string, threatType string) {
 	payload, _ := json.Marshal(threat)
 	msg := string(payload)
 
-	// Redis Broadcast
+	// Redis Pub/Sub Broadcast
 	if mtd.MtdRedis != nil && mtd.MtdRedis.Enabled {
 		ctx := context.Background()
 		mtd.MtdRedis.Client.Publish(ctx, "nexus:threat_stream", payload)
 	}
 
-	// Internal Broadcast to Dashboards
+	// Penyiaran internal asinkron (SSE listener fan-out)
 	np.ThreatListeners.Range(func(key, value interface{}) bool {
 		ch := value.(chan string)
 		select {
@@ -323,9 +349,9 @@ func (np *NexusProxy) PublishThreat(ip string, threatType string) {
 	})
 }
 
-// routeToHoneypot performs silent NAT to the Honeypot — Digital Hallucination.
+// routeToHoneypot melakukan NAT silap mata (silent diversion) ke server Honeypot.
 func (np *NexusProxy) routeToHoneypot(w http.ResponseWriter, r *http.Request) {
-	honeypotURL := "http://localhost:9090" // Honeypot's internal address
+	honeypotURL := "http://localhost:9090"
 	target, _ := url.Parse(honeypotURL)
 	hp := httputil.NewSingleHostReverseProxy(target)
 	r.Host = target.Host

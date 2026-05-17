@@ -1,3 +1,4 @@
+// Package mtd (Moving Target Defense) menyediakan modul manajemen trafik dan pembatasan laju paket (rate limiting).
 package mtd
 
 import (
@@ -10,30 +11,30 @@ import (
 	"time"
 )
 
-// ipBucket holds per-IP token bucket state.
+// ipBucket mendefinisikan status token bucket individu untuk setiap IP sumber.
 type ipBucket struct {
 	tokens     float64
 	lastRefill time.Time
 }
 
-// PerIPTokenBucket implements per-source-IP rate limiting using Token Bucket.
-// Upgrade dari versi global: setiap IP memiliki bucket-nya sendiri.
-// Capacity: max burst per IP (e.g. 100 requests)
-// RefillRate: sustained rate per IP per second (e.g. 100 req/s)
+// PerIPTokenBucket mengimplementasikan pembatasan laju paket per alamat IP sumber (Per-IP Rate Limiting)
+// dengan algoritma Token Bucket.
+//
+// Alasan Arsitektural (Why):
+// Algoritma Token Bucket dipilih karena memungkinkan lonjakan trafik wajar (bursts) hingga batas `capacity`,
+// namun tetap membatasi laju rata-rata berkelanjutan (`refillRate`). Ini ideal untuk mengizinkan pemuatan
+// aset web dinamis (seperti CSS/JS gambar) sekaligus memblokir serangan brute-force atau DDoS volumetrik.
 type PerIPTokenBucket struct {
-	mu         sync.Mutex
-	buckets    map[string]*ipBucket
-	capacity   float64
-	refillRate float64
-	// janitor cleans up stale IP entries periodically
-	cleanupInterval time.Duration
-	// optional callback for telemetry
-	OnRateLimit func(r *http.Request)
+	mu              sync.Mutex
+	buckets         map[string]*ipBucket
+	capacity        float64
+	refillRate      float64
+	cleanupInterval time.Duration // Interval pembersihan entri IP yang tidak aktif (janitor)
+	OnRateLimit     func(r *http.Request)
 }
 
-// NewPerIPTokenBucket creates a per-IP rate limiter.
-// capacity: max burst per unique source IP
-// refillRate: tokens added per second per IP
+// NewPerIPTokenBucket mengkonstruksi pembatas laju paket per IP baru.
+// Menjalankan goroutine janitor latar belakang untuk manajemen siklus hidup memori.
 func NewPerIPTokenBucket(capacity, refillRate float64) *PerIPTokenBucket {
 	tb := &PerIPTokenBucket{
 		buckets:         make(map[string]*ipBucket),
@@ -45,12 +46,14 @@ func NewPerIPTokenBucket(capacity, refillRate float64) *PerIPTokenBucket {
 	return tb
 }
 
-// getRealIP extracts the true client IP from a request.
-// Priority: X-Forwarded-For (first entry) -> X-Real-IP -> RemoteAddr.
-// This fix addresses FINDING-B01: localhost deployments behind a proxy or during
-// testing with spoofed X-Forwarded-For headers will now correctly isolate per-IP.
+// getRealIP mengekstrak IP asli klien dari request HTTP secara aman.
+//
+// Alasan Arsitektural (Why):
+// Di lingkungan cloud produksi, gateway sering kali berjalan di belakang Load Balancer, CDN, atau Proxy (seperti Cloudflare).
+// Jika hanya membaca RemoteAddr, seluruh trafik akan terdeteksi berasal dari satu IP Proxy tunggal (mengakibatkan
+// rate limiting memblokir seluruh pengguna web sah). Pengecekan hierarkis:
+// X-Forwarded-For (Entri Pertama) -> X-Real-IP -> RemoteAddr, menjamin keakuratan identifikasi IP.
 func getRealIP(r *http.Request) string {
-	// X-Forwarded-For may contain a comma-separated chain: "client, proxy1, proxy2"
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		parts := strings.Split(xff, ",")
 		for _, part := range parts {
@@ -63,7 +66,6 @@ func getRealIP(r *http.Request) string {
 	if xri := r.Header.Get("X-Real-IP"); xri != "" {
 		return strings.TrimSpace(xri)
 	}
-	// Fallback: strip port from RemoteAddr
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
@@ -71,14 +73,10 @@ func getRealIP(r *http.Request) string {
 	return ip
 }
 
-// Allow checks if the given source IP has tokens remaining.
-// sourceIP should be the raw string from RemoteAddr; use HTTPMiddleware for HTTP.
-// Returns true if allowed, false if rate-limited.
-// Allow checks if the given source IP has tokens remaining.
-// sourceIP should be the raw string from RemoteAddr; use HTTPMiddleware for HTTP.
-// Returns true if allowed, false if rate-limited.
+// Allow mengevaluasi apakah IP sumber tertentu masih memiliki token yang cukup untuk meneruskan request.
+// Menggunakan Redis terdistribusi jika aktif, dengan fallback otomatis ke memori lokal jika luring.
 func (tb *PerIPTokenBucket) Allow(sourceIP string) bool {
-	// Strip port if present
+	// Normalisasi IP: Bersihkan nomor port (misal "127.0.0.1:48281" -> "127.0.0.1")
 	ip, _, err := net.SplitHostPort(sourceIP)
 	if err != nil {
 		ip = sourceIP
@@ -90,11 +88,14 @@ func (tb *PerIPTokenBucket) Allow(sourceIP string) bool {
 	return tb.allowLocal(ip)
 }
 
-// allowRedis uses atomic Lua scripting in Redis for Token Bucket.
+// allowRedis mengimplementasikan Token Bucket terdistribusi menggunakan skrip Lua atomik di Redis.
+//
+// Alasan Arsitektural (Why):
+// Dalam arsitektur multi-node (kluster gateway terdistribusi), rate limiting lokal tidak cukup karena peretas
+// dapat membagi beban serangan ke node gateway yang berbeda. Skrip Lua dieksekusi secara atomik di server Redis,
+// menghindari masalah kondisi balapan data (race condition) tanpa memerlukan mekanisme locking distributed yang rumit.
 func (tb *PerIPTokenBucket) allowRedis(ip string) bool {
 	ctx := context.Background()
-	// Using a simple fixed-window or INCR fallback for Redis simplicity in this prototype
-	// For production: a correct Lua TokenBucket script. Here is a simple implementation:
 	script := `
 		local key = KEYS[1]
 		local capacity = tonumber(ARGV[1])
@@ -125,7 +126,7 @@ func (tb *PerIPTokenBucket) allowRedis(ip string) bool {
 		redis.call('EXPIRE', key, math.ceil(capacity/rate) + 10)
 		return 0
 	`
-	now := float64(time.Now().UnixNano()) / 1e9 // seconds
+	now := float64(time.Now().UnixNano()) / 1e9 // Konversi waktu nanosecond ke hitungan detik (float)
 	res, err := MtdRedis.Client.Eval(ctx, script, []string{"tb:" + ip}, tb.capacity, tb.refillRate, now).Result()
 	if err != nil {
 		log.Printf("[MTD-REDIS] Eval Error: %v. Falling back to memory.", err)
@@ -134,7 +135,12 @@ func (tb *PerIPTokenBucket) allowRedis(ip string) bool {
 	return res.(int64) == 1
 }
 
-// allowLocal is the local fallback Memory-based Token Bucket (Zero-Dependency)
+// allowLocal mengimplementasikan Token Bucket berbasis memori lokal (In-Memory Fallback).
+//
+// Alasan Arsitektural (Why):
+// Menyediakan mekanisme failover yang tangguh. Jika server Redis mengalami gangguan atau kehabisan memori,
+// sistem secara asinkron berpindah ke penyimpanan RAM lokal terisolasi agar kelancaran sistem (availability)
+// tidak terpengaruh sedikit pun (ISO 25010 - Fault Tolerance).
 func (tb *PerIPTokenBucket) allowLocal(ip string) bool {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
@@ -146,7 +152,7 @@ func (tb *PerIPTokenBucket) allowLocal(ip string) bool {
 		tb.buckets[ip] = b
 	}
 
-	// Refill based on elapsed time
+	// Refill (pengisian ulang) token berdasarkan akumulasi waktu yang telah lewat sejak request terakhir.
 	elapsed := now.Sub(b.lastRefill).Seconds()
 	b.lastRefill = now
 	b.tokens += elapsed * tb.refillRate
@@ -154,6 +160,7 @@ func (tb *PerIPTokenBucket) allowLocal(ip string) bool {
 		b.tokens = tb.capacity
 	}
 
+	// Jika jumlah token >= 1.0, kurangi 1 token dan izinkan request (PASS).
 	if b.tokens >= 1.0 {
 		b.tokens--
 		return true
@@ -161,9 +168,8 @@ func (tb *PerIPTokenBucket) allowLocal(ip string) bool {
 	return false
 }
 
-// HTTPMiddleware wraps an HTTP handler with per-IP Token Bucket rate limiting.
-// Uses getRealIP() to correctly identify client behind proxies/CDN.
-// Returns HTTP 429 with a Retry-After header when IP bucket is exhausted.
+// HTTPMiddleware membungkus handler HTTP dengan logika pembatasan laju paket per IP klien.
+// Mengembalikan status HTTP 429 Too Many Requests disertai header Retry-After jika batas tercapai.
 func (tb *PerIPTokenBucket) HTTPMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		realIP := getRealIP(r)
@@ -183,7 +189,12 @@ func (tb *PerIPTokenBucket) HTTPMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// janitor periodically removes stale IP entries to prevent memory growth.
+// janitor bertugas membersihkan memori dari entri IP yang sudah tidak aktif secara berkala.
+//
+// Alasan Arsitektural (Why):
+// Tanpa janitor, jika server diserang oleh jutaan IP unik sekali pakai (seperti serangan botnet DDoS),
+// peta `buckets` di RAM lokal akan membengkak tiada henti hingga server mengalami crash kehabisan memori (OOM).
+// Janitor secara berkala menghapus IP yang tidak aktif lebih lama dari cleanupInterval untuk proteksi kebocoran memori.
 func (tb *PerIPTokenBucket) janitor() {
 	ticker := time.NewTicker(tb.cleanupInterval)
 	defer ticker.Stop()
@@ -199,12 +210,10 @@ func (tb *PerIPTokenBucket) janitor() {
 	}
 }
 
-// TokenBucket is kept for backward compatibility with main.go.
-// New code should use PerIPTokenBucket.
+// TokenBucket dipertahankan demi kompatibilitas kode lawas dengan main.go.
 type TokenBucket = PerIPTokenBucket
 
-// NewTokenBucket is a backward-compatible alias with global-style params.
-// Internally creates a PerIPTokenBucket.
+// NewTokenBucket dipertahankan demi kompatibilitas API pemanggilan awal di main.go.
 func NewTokenBucket(capacity, refillRate float64) *PerIPTokenBucket {
 	return NewPerIPTokenBucket(capacity, refillRate)
 }

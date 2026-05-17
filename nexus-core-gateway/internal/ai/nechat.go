@@ -1,3 +1,4 @@
+// Package ai mengimplementasikan integrasi kecerdasan buatan untuk asisten SOC Command Center.
 package ai
 
 import (
@@ -12,6 +13,9 @@ import (
 	"github.com/nexus-cyber/nexus-core-gateway/pkg/logger"
 )
 
+// NechatClient mengimplementasikan Inti Percakapan SOC (NEXUS-SOC-BRAIN v2.5).
+// Digunakan oleh administrator melalui Command Center desktop untuk berkonsultasi mengenai status telemetri,
+// serangan aktif, dan mitigasi MTD.
 type NechatClient struct {
 	APIKey   string
 	Model    string
@@ -33,17 +37,24 @@ func NewNechatClient() *NechatClient {
 	}
 }
 
+// Chat mengirimkan riwayat telemetri terkini dan kueri admin ke model bahasa besar (Ollama/OpenRouter).
+//
+// Alasan Arsitektural (Why):
+// - Membatasi (truncate) konteks telemetri maksimal 2000 karakter terakhir (Optimization) untuk mencegah
+//   kebocoran memori (context bloat) dan menghemat biaya token API.
+// - Menyediakan modul fallback otomatis (generateExpertFallback) yang berbasis Expert System Heuristik
+//   jika model utama luring (offline) atau mengalami timeout, sehingga menjamin keandalan sistem SOC
+//   setiap saat (ISO 25010 - Functional Suitability & Reliability).
 func (n *NechatClient) Chat(logs []logger.TelemetryLog, query string) (string, error) {
-	// Hybrid System: Menggunakan nexus-brain dengan Fallback Expert System
-	
 	logsBytes, _ := json.MarshalIndent(logs, "", "  ")
 	logsContext := string(logsBytes)
 	
-	// Truncate logs to save context window (Optimization)
+	// Pembatasan memori konteks untuk stabilitas RAM lokal.
 	if len(logsContext) > 2000 {
 		logsContext = logsContext[len(logsContext)-2000:]
 	}
 
+	// Insting taktis sebagai inti kecerdasan pertahanan siber otonom.
 	systemPrompt := `Anda adalah NEXUS-SOC-BRAIN v2.5, Inti Kecerdasan Pertahanan Siber Otonom. 
 Lingkungan: Nexus Command Center (NCC) | Teknologi: Moving Target Defense (MTD), PQC, Digital Hallucination.
 Tugas: 
@@ -63,8 +74,8 @@ Bahasa: Indonesia Profesional (Bahasa Intelijen SOC).`
 		},
 		"stream": false,
 		"options": map[string]interface{}{
-			"num_ctx":     4096, // Upgraded Context Window for Long-term Memory
-			"temperature": 0.2,  // Focused & Precise Reasoning
+			"num_ctx":     4096, // Ukuran Context Window untuk memori percakapan jangka pendek
+			"temperature": 0.2,  // Fokus & Presisi tinggi (meminimalkan halusinasi data telemetri)
 			"top_p":       0.9,
 			"repeat_penalty": 1.2,
 		},
@@ -77,7 +88,7 @@ Bahasa: Indonesia Profesional (Bahasa Intelijen SOC).`
 
 	req.Header.Set("Content-Type", "application/json")
 	
-	// Timeout 45 detik untuk memberikan ruang load model di RAM
+	// Batasan timeout 45 detik untuk memberi ruang loading model besar pada RAM server lokal.
 	client := &http.Client{Timeout: 45 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -106,10 +117,16 @@ Bahasa: Indonesia Profesional (Bahasa Intelijen SOC).`
 	return orResp.Choices[0].Message.Content, nil
 }
 
+// generateExpertFallback menghasilkan keputusan keamanan instan berbasis aturan pakar (Rule-Based Expert System).
+//
+// Alasan Arsitektural (Why):
+// Ketika jaringan terputus atau model utama offline, gateway tidak boleh membiarkan admin tanpa respon.
+// Expert System lokal memindai array logs di memori secara kilat dan merespon kueri admin menggunakan pola heuristik
+// yang di-hardcode agar operasional SOC tetap berjalan normal (High-Availability Policy).
 func (n *NechatClient) generateExpertFallback(logs []logger.TelemetryLog, query string) string {
 	q := strings.ToLower(query)
 	
-	// Analyze Logs for Heuristics
+	// Analisis Telemetri Berbasis Aturan (Rule-Based Heuristic)
 	sqli := 0
 	brute := 0
 	blocked := 0
@@ -128,7 +145,7 @@ func (n *NechatClient) generateExpertFallback(logs []logger.TelemetryLog, query 
 
 	res := "🛡️ **NEXUS EXPERT ANALYST (Operational Mode)**\n\n"
 	
-	// Smart Keyword Dispatcher
+	// Smart Keyword Dispatcher (Penyalur Kata Kunci Cerdas)
 	if strings.Contains(q, "apa") || strings.Contains(q, "siapa") || strings.Contains(q, "tahu") {
 		res += "Saya adalah modul analisis otonom Nexus. Saya memantau trafik secara real-time dan menggunakan MTD (Moving Target Defense) untuk melindungi aset Anda.\n\n"
 	}

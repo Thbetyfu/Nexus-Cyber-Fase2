@@ -1,3 +1,4 @@
+// Package ai mengimplementasikan integrasi kecerdasan buatan untuk analisis forensik siber tingkat lanjut.
 package ai
 
 import (
@@ -11,47 +12,51 @@ import (
 	"time"
 )
 
-// LlamaClient implements @skill-dual-brain Reasoning Layer via OpenRouter API.
-// Model: Qwen3 235B-A22B — highest-reasoning open-weight model for APT forensics.
-// API Key loaded from OPENROUTER_API_KEY env variable. NEVER hardcoded.
+// LlamaClient mengimplementasikan Reasoning Layer (Pemberi Keputusan Forensik Fase 2).
+// Menggunakan API OpenRouter untuk mengakses model Qwen3 235B-A22B — model open-weight dengan penalaran tertinggi
+// untuk menganalisis Advanced Persistent Threat (APT) secara mendalam dan mendeteksi False Positives.
+//
+// Alasan Arsitektural (Why):
+// Kunci API dimuat secara dinamis dari environment (`OPENROUTER_API_KEY`) dan TIDAK PERNAH di-hardcode
+// demi mematuhi prinsip Zero Trust (ISO 27001 - Kontrol A.10 Cryptography & A.18 Compliance).
 type LlamaClient struct {
 	APIKey   string
 	Model    string
 	Endpoint string
 }
 
-// MitigationAction represents an autonomous remediation step recommended by the AI.
+// MitigationAction merepresentasikan rekomendasi penanganan otomatis yang dihasilkan secara cerdas oleh AI.
 type MitigationAction struct {
-	ActionType string                 `json:"action_type"` // BLOCK_IP|ISOLATE|PATCH|REDIRECT_HONEYPOT|SHUFFLE_MTD
-	Priority   string                 `json:"priority"`    // CRITICAL|HIGH|MEDIUM
-	Parameters map[string]interface{} `json:"parameters"`
+	ActionType string                 `json:"action_type"` // BLOCK_IP | ISOLATE | PATCH | REDIRECT_HONEYPOT | SHUFFLE_MTD
+	Priority   string                 `json:"priority"`    // CRITICAL | HIGH | MEDIUM
+	Parameters map[string]interface{} `json:"parameters"`  // Parameter dinamis tambahan (seperti durasi IP block)
 }
 
-// LlamaForensicResult is the structured forensic output from the Reasoning Layer.
+// LlamaForensicResult menyimpan respon analisis forensik terstruktur dari Llama/Qwen3-235B.
 type LlamaForensicResult struct {
-	ThreatVerdict     string             `json:"threat_verdict"` // CONFIRMED_MALICIOUS|FALSE_POSITIVE|ADVANCED_PERSISTENT
+	ThreatVerdict     string             `json:"threat_verdict"` // Verdict: CONFIRMED_MALICIOUS | FALSE_POSITIVE | ADVANCED_PERSISTENT
 	AttackerIntent    string             `json:"attacker_intent"`
 	AttackVector      string             `json:"attack_vector"`
 	Confidence        float64            `json:"confidence"`
 	MitigationActions []MitigationAction `json:"mitigation_actions"`
-	ForensicSummary   string             `json:"forensic_summary"`
+	ForensicSummary   string             `json:"forensic_summary"` // Laporan forensik formal untuk regulator
 }
 
-// AttackContext holds the rich dynamic context passed to the Reasoning Layer.
+// AttackContext membungkus data historis dan intelijen ancaman dinamis yang dikirim ke AI.
 type AttackContext struct {
-	AttackHistory []map[string]interface{} `json:"attack_history"`
-	ThreatIntel   map[string]interface{}   `json:"threat_intel"`
+	AttackHistory []map[string]interface{} `json:"attack_history"` // Riwayat serangan IP yang sama dalam 24 jam terakhir
+	ThreatIntel   map[string]interface{}   `json:"threat_intel"`   // Umpan ancaman STIX/TAXII dari BSSN atau ID-CERT
 	SystemState   SystemState              `json:"system_state"`
 }
 
-// SystemState holds current infrastructure telemetry.
+// SystemState mencerminkan status kesehatan infrastruktur saat ini.
 type SystemState struct {
 	ActiveIncidents   int    `json:"active_incidents"`
 	LastMTDShuffle    string `json:"last_mtd_shuffle"`
 	CurrentAlertLevel string `json:"current_alert_level"`
 }
 
-// openRouterRequest is the OpenRouter API chat completions request schema.
+// openRouterRequest mewakili skema payload chat completions OpenAI-compatible untuk OpenRouter.
 type openRouterRequest struct {
 	Model    string          `json:"model"`
 	Messages []openRouterMsg `json:"messages"`
@@ -62,7 +67,6 @@ type openRouterMsg struct {
 	Content string `json:"content"`
 }
 
-// openRouterResponse mirrors the OpenAI-compatible response format.
 type openRouterResponse struct {
 	Choices []struct {
 		Message struct {
@@ -71,8 +75,9 @@ type openRouterResponse struct {
 	} `json:"choices"`
 }
 
-// LLAMA_SYSTEM_PROMPT defines the Reasoning Layer's mission and output contract.
-// Think step-by-step internally — final output MUST be JSON only.
+// LLAMA_SYSTEM_PROMPT mendikte kepribadian, misi, dan kontrak output dari Reasoning Layer.
+// Insting AI diarahkan untuk melindungi infrastruktur vital Indonesia (OJK, Bank Indonesia)
+// serta mematuhi UU Pelindungan Data Pribadi (UU PDP) No. 27/2022.
 const LLAMA_SYSTEM_PROMPT = `You are an expert cybersecurity analyst for Indonesia's critical 
 digital infrastructure. You receive escalated threats that have been pre-screened 
 by a rapid classifier (Qwen3 32B).
@@ -86,8 +91,11 @@ Your job:
 Think step by step internally, but your FINAL response must be ONLY valid JSON.
 Indonesian context: Protect PDNS, BI, OJK infrastructure. Comply with UU PDP No. 27/2022.`
 
-// NewLlamaClient constructs the Reasoning Layer client dynamically.
-// Designed to connect to any OpenAI-compatible provider, such as local vLLM for data privacy.
+// NewLlamaClient mengkonstruksi client LlamaClient secara dinamis.
+//
+// Alasan Arsitektural (Why):
+// Dirancang fleksibel untuk mendukung endpoint on-premise lokal (seperti vLLM/Ollama) demi kerahasiaan data kedaulatan negara,
+// dengan fallback otomatis ke OpenRouter jika server on-premise tidak dikonfigurasi.
 func NewLlamaClient(model string) *LlamaClient {
 	apiKey := os.Getenv("AI_PROVIDER_KEY")
 	if apiKey == "" {
@@ -113,8 +121,12 @@ func NewLlamaClient(model string) *LlamaClient {
 	}
 }
 
-// AnalyzeEscalatedThreat performs deep forensic analysis on a suspicious payload.
-// Async-safe: call this inside a goroutine with a 30s timeout context.
+// AnalyzeEscalatedThreat melakukan analisis forensik mendalam pada payload yang dicurigai.
+//
+// Alasan Arsitektural (Why):
+// Fungsi ini didesain agar dijalankan secara asinkron (goroutine) dengan context budget 30 detik.
+// Proses ini sengaja tidak memblokir (non-blocking) arus request trafik utama pengguna demi menjamin
+// tingkat kelancaran respons aplikasi (low latency proxy) tetap optimal.
 func (l *LlamaClient) AnalyzeEscalatedThreat(qwenResult *QwenResult, payload string, ctx AttackContext) (*LlamaForensicResult, error) {
 	qwenJSON, _ := json.MarshalIndent(qwenResult, "", "  ")
 	historyJSON, _ := json.MarshalIndent(ctx.AttackHistory, "", "  ")
@@ -172,10 +184,10 @@ Respond ONLY with this JSON structure:
 	}
 	req.Header.Set("Authorization", "Bearer "+l.APIKey)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("HTTP-Referer", "https://nexus-cyber.go.id") // OpenRouter attribution
+	req.Header.Set("HTTP-Referer", "https://nexus-cyber.go.id") // Atribusi domain ke OpenRouter
 	req.Header.Set("X-Title", "Nexus Cyber Gateway")
 
-	// 30s budget for deep reasoning — runs async (non-blocking to main traffic)
+	// Anggaran waktu 30 detik agar model LLM raksasa memiliki waktu berpikir yang cukup di server inference.
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -193,8 +205,7 @@ Respond ONLY with this JSON structure:
 	return ParseLlamaResponse(rawContent)
 }
 
-// AnalyzeIntent is the legacy-compatible interface used by proxy_core.go.
-// It wraps AnalyzeEscalatedThreat with minimal context for backward compatibility.
+// AnalyzeIntent adalah antarmuka pembungkus ramah warisan (legacy) untuk proxy_core.go.
 func (l *LlamaClient) AnalyzeIntent(payload string) (*LlamaForensicResult, error) {
 	ctx := AttackContext{
 		AttackHistory: []map[string]interface{}{},
@@ -204,17 +215,17 @@ func (l *LlamaClient) AnalyzeIntent(payload string) (*LlamaForensicResult, error
 	return l.AnalyzeEscalatedThreat(nil, payload, ctx)
 }
 
-// ParseLlamaResponse parses OpenRouter output using 3-stage robust JSON parsing.
+// ParseLlamaResponse mengekstrak respon JSON Llama secara tangguh menggunakan 3-Stage Parser.
 func ParseLlamaResponse(raw string) (*LlamaForensicResult, error) {
 	raw = strings.TrimSpace(raw)
 	var result LlamaForensicResult
 
-	// Stage 1: Direct parse
+	// Stage 1: Unmarshal Langsung
 	if err := json.Unmarshal([]byte(raw), &result); err == nil {
 		return &result, nil
 	}
 
-	// Stage 2: JSON code block extraction
+	// Stage 2: Ekstraksi dari blok kode markdown ```json ... ```
 	if idx := strings.Index(raw, "```json"); idx != -1 {
 		end := strings.Index(raw[idx+7:], "```")
 		if end != -1 {
@@ -224,7 +235,7 @@ func ParseLlamaResponse(raw string) (*LlamaForensicResult, error) {
 		}
 	}
 
-	// Stage 3: Bracket search
+	// Stage 3: Bracket Search (Kurung kurawal pertama ke penutup terakhir)
 	start := strings.Index(raw, "{")
 	last := strings.LastIndex(raw, "}")
 	if start != -1 && last != -1 && last > start {

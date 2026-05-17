@@ -1,3 +1,4 @@
+// Package proxy mengimplementasikan gateway proxy reverse otonom dengan kecerdasan MTD.
 package proxy
 
 import (
@@ -11,9 +12,13 @@ import (
 	"time"
 )
 
-// BrowserIntegrityCheck implements the CGNAT Bypass JS Challenge.
-// It leverages a simple math-based Proof-of-Work to differentiate human
-// browsers from scriptless bots, issuing a 24h HMAC session cookie.
+// BrowserIntegrityCheck mengimplementasikan "CGNAT Bypass JS Challenge" (Pemeriksaan Integritas Peramban).
+//
+// Alasan Arsitektural (Why):
+// Sistem perlindungan terhadap bot pemindai scriptless (seperti curl, python-requests, atau zgrab).
+// Bot otomatis biasanya tidak mengeksekusi JavaScript. Dengan mengembalikan halaman tantangan matematika ringan
+// (Proof-of-Work) yang diselesaikan secara otomatis oleh JavaScript peramban dalam 800ms, kita dapat
+// memverifikasi keaslian browser manusia (user-agent integrity) secara transparan tanpa mengganggu kenyamanan pengguna.
 func BrowserIntegrityCheck(next http.Handler) http.Handler {
 	secret := os.Getenv("NEXUS_SESSION_SECRET")
 	if secret == "" {
@@ -21,24 +26,25 @@ func BrowserIntegrityCheck(next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// [LAYER_0_PREFLIGHT_GUARD] Bypass Preflight for Dashboard Stability
+		// [LAYER_0_PREFLIGHT_GUARD]
+		// Alasan Teknis (Why):
+		// Mengizinkan metode OPTIONS untuk bypass pemeriksaan integritas guna mendukung kelancaran komunikasi CORS
+		// pada antarmuka admin SOC Dashboard.
 		if r.Method == http.MethodOptions {
 			next.ServeHTTP(w, r)
 			return
 		}
-		// 1. Matrix Skip: Allow SOC Dashboard and verify-session APIs
-		/*
-		   NEXUS_FIX_LOG: [LAYER_0_WHITELIST_GUARD]
-		   - Kenapa ini ada? SOC Dashboard (3000) harus bisa tarik data tanpa JS Challenge (403).
-		   - Jika dihapus: Dashboard akan hampa (0 0 0) karena data tertahan di gerbang integritas.
-		*/
+		
+		// [LAYER_0_WHITELIST_GUARD]
+		// Alasan Teknis (Why):
+		// Rute API internal (`/api/`) dibebaskan dari tantangan JS karena dipanggil secara programatik
+		// oleh NCC Command Center Desktop/Web. Jika difilter, visualisasi dasbor akan gagal sinkron (blank data).
 		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api/verify-session" {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		// 2. Validate nexus_session cookie
-		// WHITELIST: Allow diagnostic APIs to bypass JS Challenge for Dashboard Sync
+		// Bypass tantangan untuk jalur sinkronisasi telemetri spesifik.
 		if strings.HasPrefix(r.URL.Path, "/api/telemetry") ||
 			strings.HasPrefix(r.URL.Path, "/api/ai-events") ||
 			strings.HasPrefix(r.URL.Path, "/api/logs") {
@@ -46,6 +52,7 @@ func BrowserIntegrityCheck(next http.Handler) http.Handler {
 			return
 		}
 
+		// 2. Validasi cookie sesi nexus_session
 		cookie, err := r.Cookie("nexus_session")
 		if err == nil {
 			if isValidSession(cookie.Value, secret) {
@@ -54,14 +61,18 @@ func BrowserIntegrityCheck(next http.Handler) http.Handler {
 			}
 		}
 
-		// 3. Return Challenge Page
+		// 3. Kembalikan halaman tantangan (Challenge Page) jika sesi tidak valid/belum terdaftar.
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
 		fmt.Fprint(w, generateChallengeHTML(r.URL.Path))
 	})
 }
 
-// verifySessionHandler handles the challenge submission
+// VerifySessionHandler menangani pengiriman jawaban tantangan Proof-of-Work browser.
+//
+// Alasan Arsitektural (Why):
+// - Jika jawaban matematika klien benar (1234 * 5678 = 7006652), sistem menerbitkan cookie otorisasi 24 jam.
+// - Cookie diset dengan atribut HttpOnly (mencegah pencurian token via XSS) dan SameSite=Lax (mitigasi CSRF).
 func (np *NexusProxy) VerifySessionHandler(w http.ResponseWriter, r *http.Request) {
 	secret := os.Getenv("NEXUS_SESSION_SECRET")
 	if secret == "" {
@@ -73,7 +84,6 @@ func (np *NexusProxy) VerifySessionHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Simple check: client sends the answer to (1234 * 5678) = 7006652
 	answer := r.FormValue("answer")
 	targetPath := r.FormValue("target")
 	if targetPath == "" {
@@ -81,7 +91,6 @@ func (np *NexusProxy) VerifySessionHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	if answer == "7006652" {
-		// Issue session
 		expiry := time.Now().Add(24 * time.Hour).Unix()
 		token := generateToken(expiry, secret)
 
@@ -101,6 +110,7 @@ func (np *NexusProxy) VerifySessionHandler(w http.ResponseWriter, r *http.Reques
 	http.Error(w, "Matrix Verification Failed. Bot Detected.", http.StatusForbidden)
 }
 
+// generateToken menyusun token bertanda tangan kriptografi menggunakan HMAC-SHA256.
 func generateToken(expiry int64, secret string) string {
 	payload := fmt.Sprintf("%d", expiry)
 	h := hmac.New(sha256.New, []byte(secret))
@@ -109,6 +119,7 @@ func generateToken(expiry int64, secret string) string {
 	return payload + "." + sig
 }
 
+// isValidSession memverifikasi integritas tanda tangan token dan masa kedaluarsanya.
 func isValidSession(token, secret string) bool {
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 {
@@ -117,7 +128,6 @@ func isValidSession(token, secret string) bool {
 
 	payload, sig := parts[0], parts[1]
 
-	// Verify signature
 	h := hmac.New(sha256.New, []byte(secret))
 	h.Write([]byte(payload))
 	expectedSig := base64.URLEncoding.EncodeToString(h.Sum(nil))
@@ -126,12 +136,12 @@ func isValidSession(token, secret string) bool {
 		return false
 	}
 
-	// Verify expiry (Phase 7 accuracy)
 	var expiry int64
 	fmt.Sscanf(payload, "%d", &expiry)
 	return time.Now().Unix() < expiry
 }
 
+// generateChallengeHTML menyintesis visual tantangan peramban bertema Matrix minimalis premium.
 func generateChallengeHTML(target string) string {
 	return `<!DOCTYPE html>
 <html>
@@ -157,8 +167,7 @@ func generateChallengeHTML(target string) string {
         </form>
     </div>
     <script>
-        // Simple Proof-of-Work Challenge
-        // Math: 1234 * 5678
+        // Eksperimen Proof-of-Work Matematis Sederhana (1234 * 5678)
         setTimeout(() => {
             const res = 1234 * 5678;
             document.getElementById('answer').value = res;

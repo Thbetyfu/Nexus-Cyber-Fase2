@@ -1,3 +1,4 @@
+// Package proxy mengimplementasikan gateway proxy reverse otonom dengan kecerdasan MTD.
 package proxy
 
 import (
@@ -15,11 +16,18 @@ import (
 	"github.com/nexus-cyber/nexus-core-gateway/pkg/logger"
 )
 
-// AIMiddleware provides the 'Dual-Brain' protection for ALL entry points,
-// including internal APIs. It triggers the OS Firewall for critical threats.
+// AIMiddleware mengimplementasikan sistem proteksi berlapis "Dual-Brain" (Reflex + Reasoning).
+//
+// Alasan Arsitektural (Why):
+// Sistem proteksi ini menerapkan filosofi pertahanan mendalam (Defense-in-Depth) dan Arsitektur Zero Trust.
+// Setiap paket dianalisis secara berjenjang dari pencocokan data cache tercepat (O(1)) hingga audit kognitif
+// asinkron menggunakan LLM guna memberikan keseimbangan optimal antara latency gateway dan tingkat deteksi ancaman.
 func (np *NexusProxy) AIMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// [LAYER 0: INTEL BLACKLIST] Instant Drop for known malicious IPs
+		// [LAYER 0: INTEL BLACKLIST SHIELD]
+		// Alasan Teknis (Why):
+		// IP yang sudah terbukti jahat langsung dibelokkan ke Honeypot tanpa perlu melalui analisis AI lagi.
+		// Ini memangkas konsumsi komputasi gerbang (Zero AI Waste Policy).
 		if database.IsIPBlacklisted(r.RemoteAddr) {
 			np.Logger.LogAIEvent(logger.AIEventLog{
 				Timestamp:    time.Now(),
@@ -45,13 +53,16 @@ func (np *NexusProxy) AIMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Skip for Honeypot itself to avoid loops
+		// Mencegah perulangan tak terbatas (infinite redirection loops) pada endpoint verifikasi sesi.
 		if r.URL.Path == "/api/verify-session" {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		// Safety: Allow SOC Dashboard Diagnostic APIs without AI filtering
+		// [BYPASS DIAGNOSTIC APIS]
+		// Alasan Teknis (Why):
+		// API internal Dashboard SOC harus dibebaskan dari filter AI agar visualisasi data telemetri,
+		// log ancaman, dan interaksi NCC tidak mengalami kemacetan akibat evaluasi heuristik teks.
 		if strings.HasPrefix(r.URL.Path, "/api/telemetry") ||
 			strings.HasPrefix(r.URL.Path, "/api/logs") ||
 			strings.HasPrefix(r.URL.Path, "/api/domains") ||
@@ -62,14 +73,23 @@ func (np *NexusProxy) AIMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// 1. Capture Payload
+		// 1. Tangkap payload body secara non-destruktif.
+		// Alasan Teknis (Why):
+		// Pembacaan r.Body mengonsumsi aliran data biner (stream read-once).
+		// Kita menyalin data ke memori, lalu merestorasi r.Body menggunakan `io.NopCloser` agar
+		// handler proxy berikutnya dapat membaca data request secara normal.
 		body, _ := io.ReadAll(r.Body)
-		r.Body = io.NopCloser(bytes.NewBuffer(body)) // Reset for next handler
+		r.Body = io.NopCloser(bytes.NewBuffer(body))
 
 		query, _ := url.QueryUnescape(r.URL.RawQuery)
 		analysisData := query + " " + string(body)
 
-		// [NEW: VIRTUAL PATCHING] Immunity Check (Local Antibodies Memory)
+		// [LAYER 1: VIRTUAL PATCH IMMUNITY CHALLENGE]
+		// Alasan Arsitektural (Why):
+		// Sistem kekebalan adaptif (Adaptive Immune System). Ketika AI mendeteksi muatan serangan SQLi/XSS baru,
+		// pola muatan tersebut disimpan dalam bentuk tanda tangan "Antibodi" di memori.
+		// Request selanjutnya yang mengandung pola serupa akan langsung diblokir seketika secara O(1) di Layer 1
+		// tanpa membuang siklus CPU untuk memanggil Regex atau Model AI kembali.
 		isPatched := false
 		np.Patches.Range(func(key, value interface{}) bool {
 			pattern := key.(string)
@@ -80,7 +100,6 @@ func (np *NexusProxy) AIMiddleware(next http.Handler) http.Handler {
 			return true
 		})
 
-		// Base Telemetry Log
 		tLog := logger.TelemetryLog{
 			Timestamp:     time.Now(),
 			SourceIP:      r.RemoteAddr,
@@ -108,11 +127,15 @@ func (np *NexusProxy) AIMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// 2. Dual-Brain Layer 1: Reflex
+		// [LAYER 2: AI REFLEX SHIELD]
+		// Alasan Arsitektural (Why):
+		// Lapisan pertahanan respons instan (latency sub-50ms). Heuristik pre-compiled Regex melakukan inspeksi
+		// tanda tangan serangan siber OWASP Top 10 (SQLi, XSS, Path Traversal) secara real-time.
 		ua := r.Header.Get("User-Agent")
 		isThreat, threatType := np.Filter.InspectAdvanced(analysisData, ua)
 
 		if isThreat {
+			// Otomatis imunisasi pola serangan jika panjang karakter memenuhi kelayakan tanda tangan antibodi.
 			if len(analysisData) > 10 {
 				np.AddAntibody(analysisData)
 			}
@@ -134,7 +157,14 @@ func (np *NexusProxy) AIMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// 3. Dual-Brain Layer 2: Reasoning (Async Background Audit)
+		// [LAYER 3: AI COGNITIVE REASONING AUDIT]
+		// Alasan Arsitektural (Why):
+		// Analisis Kognitif Asinkron (Async Background Task).
+		// Model reasoning (seperti Llama) memerlukan waktu komputasi intensif (timeout 30 detik) untuk memahami intensi peretas.
+		// Menjalankannya secara sinkron akan memacetkan koneksi klien dan meningkatkan latency gerbang secara ekstrem.
+		// Solusinya, request aman dilewatkan ke backend utama (sub-millisecond HTTP PASS), sementara audit mendalam
+		// dieksekusi di background goroutine secara terisolasi. Jika terkonfirmasi serangan canggih (APT),
+		// sistem langsung menginstruksikan modul `mtd.BlockIPAtOSLevel` untuk menghentikan seluruh paket IP penyerang.
 		if len(analysisData) > 10 {
 			tLog.Status = "ALLOWED"
 			tLog.ThreatDetail = "PASS_THROUGH_AI"
@@ -144,9 +174,10 @@ func (np *NexusProxy) AIMiddleware(next http.Handler) http.Handler {
 			go func(data string, source string, id uuid.UUID) {
 				result, err := np.Reasoning.AnalyzeIntent(data)
 				if err == nil && result != nil {
-					// Persist AI reasoning to database
+					// Rekam jejak hasil keputusan kognitif AI ke basis data audit.
 					database.SaveAIInsight(id, "qwen/qwen3-235b-a22b", result.ForensicSummary, result.ThreatVerdict)
 
+					// Eksekusi pemblokiran Netfilter seketika jika intensi terbukti berbahaya.
 					if result.ThreatVerdict == "CONFIRMED_MALICIOUS" || result.ThreatVerdict == "ADVANCED_PERSISTENT" {
 						mtd.BlockIPAtOSLevel(source)
 					}
@@ -159,6 +190,7 @@ func (np *NexusProxy) AIMiddleware(next http.Handler) http.Handler {
 			np.Logger.LogTraffic(tLog)
 		}
 
+		// Sematkan penanda pertahanan pasca-kuantum aktif pada respon keluar.
 		w.Header().Set("X-Quantum-Safe", "ML-KEM-768-Active")
 		next.ServeHTTP(w, r)
 	})

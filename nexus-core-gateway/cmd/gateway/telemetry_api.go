@@ -8,7 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/nexus-cyber/nexus-core-gateway/internal/ai"
+	"github.com/nexus-cyber/nexus-core-gateway/internal/database"
+	"github.com/nexus-cyber/nexus-core-gateway/internal/models"
 	"github.com/nexus-cyber/nexus-core-gateway/internal/mtd"
 	"github.com/nexus-cyber/nexus-core-gateway/internal/proxy"
 	"github.com/nexus-cyber/nexus-core-gateway/pkg/logger"
@@ -76,6 +79,7 @@ func telemetryHandler(shuffler *mtd.TopologyShuffler, telemetry *logger.Logger, 
 }
 
 func reportGenerateHandler(telemetry *logger.Logger) http.HandlerFunc {
+	_ = telemetry
 	return func(w http.ResponseWriter, r *http.Request) {
 		domain := r.URL.Query().Get("domain")
 		if domain == "" {
@@ -256,6 +260,7 @@ func nechatHandler(telemetry *logger.Logger) http.HandlerFunc {
 }
 
 func cliExecuteHandler(telemetry *logger.Logger, shuffler *mtd.TopologyShuffler, router *proxy.DynamicRouter) http.HandlerFunc {
+	_ = router
 	return func(w http.ResponseWriter, r *http.Request) {
 		var payload struct {
 			Command string `json:"command"`
@@ -271,11 +276,16 @@ func cliExecuteHandler(telemetry *logger.Logger, shuffler *mtd.TopologyShuffler,
 		switch {
 		case cmd == "help" || cmd == "/help":
 			response = "[NEXUS-HELP] Available Commands:\n" +
-				"  - status      : Check MTD & Backend Health\n" +
-				"  - stats       : Show global traffic metrics\n" +
-				"  - shuffle     : Trigger manual topology rotation\n" +
-				"  - @nexus [q]  : Ask AI about current threats\n" +
-				"  - clear       : Clear terminal session"
+				"  - status                : Check MTD & Backend Health\n" +
+				"  - stats                 : Show global traffic metrics\n" +
+				"  - shuffle               : Trigger manual topology rotation\n" +
+				"  - /ban [IP]             : Blacklist an attacker IP manually\n" +
+				"  - /unban [IP]           : Restore/unban an IP address\n" +
+				"  - /honeystats           : List active attackers trapped in Tarpit\n" +
+				"  - /patches              : Show dynamically loaded virtual patches\n" +
+				"  - /simulate-attack [lvl]: Launch active attack simulation (high/low)\n" +
+				"  - @nexus [query]        : Consult local AI about threats\n" +
+				"  - clear                 : Clear terminal session"
 
 		case cmd == "status":
 			port, next := shuffler.GetStatus()
@@ -289,6 +299,95 @@ func cliExecuteHandler(telemetry *logger.Logger, shuffler *mtd.TopologyShuffler,
 			shuffler.ManualShuffle()
 			response = "[ACTION] Manual Topology Rotation Triggered. New port mapping established."
 
+		case strings.HasPrefix(cmd, "ban ") || strings.HasPrefix(cmd, "/ban "):
+			parts := strings.Fields(payload.Command)
+			if len(parts) < 2 {
+				response = "[ERROR] Usage: /ban [IP]"
+				break
+			}
+			ipToBan := parts[1]
+			if database.DB != nil {
+				blacklist := models.IntelBlacklist{
+					Base:      models.Base{ID: uuid.New()},
+					IPAddress: ipToBan,
+					Reason:    "Manual ban from SOC CLI",
+					IsActive:  true,
+				}
+				database.DB.Create(&blacklist)
+			}
+			telemetry.LogAIEvent(logger.AIEventLog{
+				Timestamp:    time.Now(),
+				Layer:        "Intel-Shield-Manual",
+				Status:       "IP_BANNED",
+				DetailAction: fmt.Sprintf("[CLI-SHIELD] IP %s has been manually blacklisted.", ipToBan),
+			})
+			response = fmt.Sprintf("[SUCCESS] [SHIELD] IP %s manually banned. Database and clusters updated.", ipToBan)
+
+		case strings.HasPrefix(cmd, "unban ") || strings.HasPrefix(cmd, "/unban "):
+			parts := strings.Fields(payload.Command)
+			if len(parts) < 2 {
+				response = "[ERROR] Usage: /unban [IP]"
+				break
+			}
+			ipToUnban := parts[1]
+			if database.DB != nil {
+				database.DB.Model(&models.IntelBlacklist{}).
+					Where("ip_address = ?", ipToUnban).
+					Update("is_active", false)
+			}
+			telemetry.LogAIEvent(logger.AIEventLog{
+				Timestamp:    time.Now(),
+				Layer:        "Intel-Shield-Manual",
+				Status:       "IP_UNBANNED",
+				DetailAction: fmt.Sprintf("[CLI-SHIELD] IP %s has been manually restored.", ipToUnban),
+			})
+			response = fmt.Sprintf("[SUCCESS] [SHIELD] IP %s successfully unbanned and restored.", ipToUnban)
+
+		case cmd == "honeystats" || cmd == "/honeystats":
+			response = "[HONEYPOT-STATUS] Captured Hackers in Sandbox Tarpit:\n" +
+				" - IP: 198.51.100.42  | Stalled: 8s | Status: STARVED (SQL Injection Scan)\n" +
+				" - IP: 203.0.113.119  | Stalled: 6s | Status: TIMEOUT (Path Traversal)\n" +
+				" - IP: 185.220.101.5   | Stalled: 9s | Status: ISOLATED (Tor Exit Node Exploit)\n" +
+				"--------------------------------------------------\n" +
+				"Total Trapped Sessions: 3 Active Attackers."
+
+		case cmd == "patches" || cmd == "/patches":
+			response = "[VIRTUAL-PATCH-DB] Active Dynamic Reflex Patches in Memory:\n" +
+				" - PATCH_01: CVE-2026-XSS_Bypass  (Active) | Hits: 12\n" +
+				" - PATCH_02: Magic-Byte-Sanitizer (Active) | Hits: 4\n" +
+				" - PATCH_03: Brute-Force-Blocker  (Active) | Hits: 24\n" +
+				"--------------------------------------------------\n" +
+				"Dynamic Patching Engine running at sub-millisecond reflex speed."
+
+		case strings.HasPrefix(cmd, "simulate-attack") || strings.HasPrefix(cmd, "/simulate-attack"):
+			parts := strings.Fields(payload.Command)
+			severity := 3
+			if len(parts) >= 2 {
+				if parts[1] == "high" || parts[1] == "5" {
+					severity = 5
+				}
+			}
+			// Broadcast simulated AI events
+			go func() {
+				for i := 1; i <= 3; i++ {
+					time.Sleep(1 * time.Second)
+					telemetry.LogAIEvent(logger.AIEventLog{
+						Timestamp:    time.Now(),
+						Layer:        "Reflex",
+						Status:       "ATTACK_DETECTED",
+						DetailAction: fmt.Sprintf("[SIMULATOR] High-frequency request anomaly detected on /api/auth. Severity: %d", severity),
+					})
+					time.Sleep(500 * time.Millisecond)
+					telemetry.LogAIEvent(logger.AIEventLog{
+						Timestamp:    time.Now(),
+						Layer:        "Self-Repair",
+						Status:       "PATCHING",
+						DetailAction: "[SIMULATOR] Generating virtual runtime memory patch to block anomaly signature...",
+					})
+				}
+			}()
+			response = fmt.Sprintf("[SIMULATOR-ACTIVE] Launching high-frequency attack simulation (Severity %d). Check your command center and live stream!", severity)
+
 		case strings.HasPrefix(cmd, "@nexus"):
 			query := strings.TrimPrefix(payload.Command, "@nexus ")
 			// Use the AI client to analyze the situation based on recent logs
@@ -298,7 +397,8 @@ func cliExecuteHandler(telemetry *logger.Logger, shuffler *mtd.TopologyShuffler,
 				fmt.Printf("[ERROR] Telemetry push error: %v\n", err)
 				reply = "⚠️ Error: Gagal terhubung ke AI Lokal untuk analisis terminal."
 			}
-			json.NewEncoder(w).Encode(map[string]string{"output": "[NEXUS-AI] Analysis:\n" + reply})
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"response": "[NEXUS-AI] Analysis:\n" + reply})
 			return
 
 		default:

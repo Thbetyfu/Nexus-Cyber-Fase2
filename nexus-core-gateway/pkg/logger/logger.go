@@ -1,3 +1,4 @@
+// Package logger mengimplementasikan sistem pencatatan telemetri trafik dan aktivitas kognitif AI secara real-time.
 package logger
 
 import (
@@ -16,31 +17,38 @@ import (
 	"github.com/nexus-cyber/nexus-core-gateway/internal/models"
 )
 
-// TelemetryLog represents traffic metadata for Nexus Dashboard.
+// TelemetryLog merepresentasikan metadata trafik yang dialirkan ke dasbor visualisasi Nexus.
 type TelemetryLog struct {
 	Timestamp         time.Time `json:"timestamp"`
 	SourceIP          string    `json:"source_ip"`
-	AttackerID        string    `json:"attacker_id,omitempty"` // Derived from IP + UA
+	AttackerID        string    `json:"attacker_id,omitempty"` // Identifikasi unik peretas
 	GeoLocation       string    `json:"geo_location,omitempty"`
 	ISP               string    `json:"isp,omitempty"`
 	DeviceFingerprint string    `json:"device_fingerprint,omitempty"`
 	Endpoint          string    `json:"endpoint"`
 	Method            string    `json:"method"`
-	Status            string    `json:"status"` // ALLOWED, BLOCKED, FLAG_TO_REASONING
+	Status            string    `json:"status"` // Status eksekusi: ALLOWED, BLOCKED, HONEYPOT_REDIRECTED, dll.
 	ThreatDetail      string    `json:"threat_detail,omitempty"`
-	TargetDomain      string    `json:"target_domain"` // Domain tracking for Multi-Tenancy
+	TargetDomain      string    `json:"target_domain"` // Domain target untuk pelacakan Multi-Tenant
 	LatencyMS         int64     `json:"latency_ms"`
 	PayloadSample     string    `json:"payload_sample,omitempty"`
 }
 
-// AIEventLog records cognitive activities and self-repair actions
+// AIEventLog merepresentasikan aktivitas internal asisten AI kognitif dan tindakan self-repair.
 type AIEventLog struct {
 	Timestamp    time.Time `json:"timestamp"`
-	Layer        string    `json:"layer"`         // e.g., "Reflex", "Reasoning", "Self-Repair"
-	Status       string    `json:"status"`        // e.g., "Analyzing", "Mitigating", "Repairing"
-	DetailAction string    `json:"detail_action"` // e.g., "Blocked pattern 'UNION SELECT' from IP X"
+	Layer        string    `json:"layer"`         // Lapisan keamanan: "Reflex", "Reasoning", "Self-Repair"
+	Status       string    `json:"status"`        // Status: "Analyzing", "Mitigating", "Repairing"
+	DetailAction string    `json:"detail_action"` // Penjelasan rinci tindakan otonom
 }
 
+// Logger mengelola pencatatan data trafik ke penyimpanan lokal, basis data, dan memori untuk dasbor.
+//
+// Alasan Arsitektural (Why):
+// Sistem pencatatan ini dirancang berdasarkan standar ISO 25010 (Time-Behavior & Efficiency) dan ISO 27001 (Auditing).
+// Untuk mencegah perlambatan eksekusi rute akibat operasi pencatatan, logger ini menerapkan:
+// - Caching Fingerprint: Menghindari parsing berulang terhadap IP dan User-Agent yang sama.
+// - Asynchronous DB Write: Penyimpanan audit ke basis data PostgreSQL dilakukan melalui goroutine latar belakang terpisah.
 type Logger struct {
 	file           *os.File
 	aiFile         *os.File
@@ -49,19 +57,20 @@ type Logger struct {
 	recentAIEvents []AIEventLog
 	OnAIEvent      func(AIEventLog)
 
-	// Global Counters
+	// Penghitung akumulatif global untuk visualisasi dasbor utama
 	TotalAllowed  int
 	TotalBlocked  int
 	TotalHoneypot int
 	TotalPanic    int
 
-	// Domain Stats (Cumulative per Workspace)
+	// Statistik per domain untuk arsitektur multi-tenant
 	DomainStats map[string]*DomainStatsEntry
 
-	// Profiling Cache for performance (ISO 25010 Efficiency)
+	// Cache profil perantara untuk efisiensi komputasi ekstrem
 	fingerprintCache map[string]TelemetryLog
 }
 
+// NewLogger mengonstruksi sistem pencatatan baru dan mempratata domain aset nasional kritis.
 func NewLogger() (*Logger, error) {
 	f, err := os.OpenFile("nexus_traffic.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -82,7 +91,7 @@ func NewLogger() (*Logger, error) {
 		DomainStats:      make(map[string]*DomainStatsEntry),
 	}
 
-	// [NEXUS_V12_ASSET_SHIELD]: Initialize critical national assets for total visibility
+	// Inisialisasi awal aset strategis nasional demi pelacakan terpusat instan.
 	criticalAssets := []string{
 		"localhost",
 		"ojk.go.id",
@@ -99,20 +108,25 @@ func NewLogger() (*Logger, error) {
 	return l, nil
 }
 
+// DomainStatsEntry menampung hitungan performa per domain.
 type DomainStatsEntry struct {
 	Allowed  int
 	Honeypot int
 	Blocked  int
 }
 
-// EnrichLog adds attacker profiling for security intelligence.
-// Implements SHA-256 fingerprinting and GeoIP lookup logic.
+// EnrichLog melengkapi log telemetri dengan sidik jari digital (fingerprinting) dan deteksi perangkat.
+//
+// Alasan Arsitektural (Why):
+// 1. Menerapkan pengujian cache (`fingerprintCache`) di tingkat awal untuk menghindari kalkulasi SHA-256 yang mahal
+//    dan parsing string User-Agent yang berat secara berulang untuk paket-paket dari sumber yang sama.
+// 2. Menggunakan algoritma SHA-256 dari kombinasi IP + User-Agent klien untuk menghasilkan pengenal unik
+//    (`AttackerID`). Hal ini mempermudah pelacakan peretas meskipun mereka mencoba memalsukan identitas request.
 func (l *Logger) EnrichLog(log *TelemetryLog, r *http.Request) {
 	if r == nil {
 		return
 	}
 
-	// 0. Extract Domain (Multi-Tenant Hub)
 	host := r.Host
 	if host == "" {
 		host = "all"
@@ -120,9 +134,9 @@ func (l *Logger) EnrichLog(log *TelemetryLog, r *http.Request) {
 	log.TargetDomain = host
 
 	uaStr := r.Header.Get("User-Agent")
-	// Use IP + UA for fingerprinting (ISO 25010 Reliability)
 	cacheKey := log.SourceIP + uaStr
 
+	// Uji keberadaan data profil klien di memori cache lokal
 	l.mu.RLock()
 	cache, exists := l.fingerprintCache[cacheKey]
 	l.mu.RUnlock()
@@ -135,18 +149,18 @@ func (l *Logger) EnrichLog(log *TelemetryLog, r *http.Request) {
 		return
 	}
 
-	// 1. Digital Fingerprinting (SHA-256)
+	// 1. SHA-256 Digital Fingerprinting
 	h := sha256.New()
 	h.Write([]byte(cacheKey))
 	log.AttackerID = fmt.Sprintf("APT-ID-%X", h.Sum(nil)[:4])
 
-	// 2. User-Agent Profiling
+	// 2. User-Agent Parsing
 	ua := user_agent.New(uaStr)
 	osInfo := ua.OS()
 	browser, _ := ua.Browser()
 	log.DeviceFingerprint = fmt.Sprintf("%s (%s)", osInfo, browser)
 
-	// 3. GeoIP Lookup (Simulator via Local/External lookup)
+	// 3. Klasifikasi Zona Koneksi (Mock Dynamic GeoIP)
 	isLocal := strings.HasPrefix(log.SourceIP, "127.") ||
 		strings.HasPrefix(log.SourceIP, "::1") ||
 		strings.HasPrefix(log.SourceIP, "[::1]") ||
@@ -156,7 +170,6 @@ func (l *Logger) EnrichLog(log *TelemetryLog, r *http.Request) {
 		log.GeoLocation = "Localhost, Nexus Gate"
 		log.ISP = "Internal Loopback"
 	} else {
-		// Mock dynamic GeoIP (can be integrated with ip-api.com)
 		log.GeoLocation = "Global, Secure Zone"
 		if strings.Contains(uaStr, "curl") || strings.Contains(uaStr, "python") {
 			log.ISP = "Automated Bot/Scanner"
@@ -165,24 +178,34 @@ func (l *Logger) EnrichLog(log *TelemetryLog, r *http.Request) {
 		}
 	}
 
-	// Update Cache for performance (Efficiency)
+	// Simpan ke cache lokal untuk request berikutnya
 	l.mu.Lock()
 	l.fingerprintCache[cacheKey] = *log
 	l.mu.Unlock()
 }
 
+// LogTraffic mencatat data statistik trafik ke berkas log, memori RAM, dan database relasional.
+//
+// Alasan Arsitektural (Why):
+// 1. Pembaruan metrik domain (`DomainStats`) dinormalisasi dengan membuang nomor port klien
+//    agar data tercatat bersih berdasarkan nama domain host utama (misal: "localhost:8080" -> "localhost").
+// 2. Penyimpanan ke database PostgreSQL dilakukan secara **asinkron** (`go func`). Operasi I/O jaringan ke DB
+//    relasional bisa memakan waktu hingga puluhan milidetik. Memindahkannya ke goroutine latar belakang
+//    memastikan latency gateway tidak terpengaruh oleh performa query basis data (ISO 25010 Efficiency).
+// 3. Nilai biner payload dibersihkan dengan `strings.ToValidUTF8(..., "?")`. Perintah SQL INSERT PostgreSQL
+//    akan memicu error fatal (SQLSTATE 22021) jika mendeteksi deretan byte biner non-UTF8 (misalnya muatan eksploitasi buffer overflow).
+//    Pembersihan ini menjamin proses persistensi berjalan andal (Fault Tolerance).
 func (l *Logger) LogTraffic(log TelemetryLog) uuid.UUID {
-	// Generate UUID here so we can return it immediately
 	logID := uuid.New()
 
-	// Persistence (JSON Line standard)
+	// Tulis baris JSON ke berkas log lokal (JSON Lines standard)
 	data, _ := json.Marshal(log)
 	l.file.WriteString(string(data) + "\n")
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	// 1. Update Global Counters (Dashboard Main)
+	// 1. Perbarui Penghitung Global
 	switch log.Status {
 	case "ALLOWED":
 		l.TotalAllowed++
@@ -192,10 +215,9 @@ func (l *Logger) LogTraffic(log TelemetryLog) uuid.UUID {
 		l.TotalBlocked++
 	}
 
-	// 2. Update Multi-Tenant Counters (Workspace Selection)
+	// 2. Perbarui Penghitung Multi-Tenant (Domain Stats)
 	if log.TargetDomain != "" {
 		dom := strings.ToLower(log.TargetDomain)
-		// Domain Normalization: Strip potential port suffixes added by clients
 		if idx := strings.Index(dom, ":"); idx != -1 {
 			dom = dom[:idx]
 		}
@@ -215,17 +237,16 @@ func (l *Logger) LogTraffic(log TelemetryLog) uuid.UUID {
 		}
 	}
 
-	// 3. Maintain Memory Buffer (Live Terminal)
+	// 3. Batasi buffer memori (geser data lama) agar RAM tidak membengkak tanpa batas (OOM protection)
 	l.recentLogs = append(l.recentLogs, log)
 	if len(l.recentLogs) > 50 {
 		l.recentLogs = l.recentLogs[len(l.recentLogs)-50:]
 	}
 
-	// Console Log for Docker visibility
 	fmt.Printf("[NET-TRAFFIC] %s | %s | %s | %s -> %s | %dms\n",
 		log.Timestamp.Format("15:04:05"), log.Status, log.TargetDomain, log.SourceIP, log.Endpoint, log.LatencyMS)
 
-	// 4. Asynchronous Database Persistence (ISO 27001)
+	// 4. Persistensi Audit Database Asinkron (ISO 27001)
 	if database.DB != nil {
 		go func(l TelemetryLog) {
 			severity := 1
@@ -239,7 +260,7 @@ func (l *Logger) LogTraffic(log TelemetryLog) uuid.UUID {
 				severity = 5
 			}
 
-			// Clean binary payload to prevent Postgres non-UTF8 encoding errors (SQLSTATE 22021)
+			// Bersihkan byte non-UTF8 untuk keamanan Postgres INSERT
 			cleanPayload := strings.ToValidUTF8(l.PayloadSample, "?")
 
 			dbLog := models.ThreatLog{
@@ -249,34 +270,32 @@ func (l *Logger) LogTraffic(log TelemetryLog) uuid.UUID {
 				Status:        l.Status,
 				ThreatType:    l.ThreatDetail,
 				Severity:      severity,
-				UserAgent:     l.DeviceFingerprint, // Or the raw UA if available, we use DeviceFingerprint for now
+				UserAgent:     l.DeviceFingerprint,
 				LatencyMs:     int(l.LatencyMS),
 				PayloadSample: cleanPayload,
 			}
-			dbLog.ID = logID // Use the pre-generated ID
-			
-			// Try to insert
+			dbLog.ID = logID
+
 			if err := database.DB.Create(&dbLog).Error; err != nil {
 				fmt.Printf("[DB-ERROR] Failed to save threat log: %v\n", err)
 			}
-		}(log) // Pass by value to avoid race conditions in loop
+		}(log)
 	}
 
 	return logID
 }
 
-// GetRecentLogs returns a copy of the recent logs for the API.
+// GetRecentLogs mengembalikan salinan log telemetri terbaru demi keamanan pembacaan bersama.
 func (l *Logger) GetRecentLogs() []TelemetryLog {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
-	// Return a copy to prevent race conditions during JSON serialization
 	cpy := make([]TelemetryLog, len(l.recentLogs))
 	copy(cpy, l.recentLogs)
 	return cpy
 }
 
-// LogAIEvent records cognitive AI events
+// LogAIEvent mencatat aktivitas kognitif AI secara real-time.
 func (l *Logger) LogAIEvent(event AIEventLog) {
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now()
@@ -293,18 +312,16 @@ func (l *Logger) LogAIEvent(event AIEventLog) {
 		l.recentAIEvents = l.recentAIEvents[len(l.recentAIEvents)-20:]
 	}
 
-	// Console Log for Docker visibility
 	fmt.Printf("[AI-COGNITION] %s | Layer: %s | Status: %s | %s\n",
 		event.Timestamp.Format("15:04:05"), event.Layer, event.Status, event.DetailAction)
 
-	// Trigger real-time broadcast if callback is set
 	if l.OnAIEvent != nil {
 		l.OnAIEvent(event)
 	}
 	l.mu.Unlock()
 }
 
-// GetRecentAIEvents returns the 20 most recent AI activity logs
+// GetRecentAIEvents mengembalikan daftar riwayat aktivitas kognitif AI terbaru.
 func (l *Logger) GetRecentAIEvents() []AIEventLog {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -314,6 +331,7 @@ func (l *Logger) GetRecentAIEvents() []AIEventLog {
 	return cpy
 }
 
+// Close menutup objek berkas logging secara aman sewaktu aplikasi berhenti.
 func (l *Logger) Close() {
 	if l.file != nil {
 		l.file.Close()
@@ -323,6 +341,7 @@ func (l *Logger) Close() {
 	}
 }
 
+// GetDomainStats mengambil data performa domain tertentu.
 func (l *Logger) GetDomainStats(domain string) (Allowed, Blocked, Honeypot int) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -333,6 +352,7 @@ func (l *Logger) GetDomainStats(domain string) (Allowed, Blocked, Honeypot int) 
 	return 0, 0, 0
 }
 
+// GetDomains mengembalikan seluruh nama domain terdaftar di dalam pelacakan logger.
 func (l *Logger) GetDomains() []string {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -343,21 +363,18 @@ func (l *Logger) GetDomains() []string {
 	return domains
 }
 
-// ResetAll performs a total cognitive purge of all metrics and memory buffers.
+// ResetAll membersihkan seluruh metrik sistem secara total (Cognitive Purge).
 func (l *Logger) ResetAll() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	// 1. Reset Global Counters
 	l.TotalAllowed = 0
 	l.TotalBlocked = 0
 	l.TotalHoneypot = 0
 	l.TotalPanic = 0
 
-	// 2. Clear Domain Stats
 	l.DomainStats = make(map[string]*DomainStatsEntry)
 
-	// 3. Purge Memory Buffers
 	l.recentLogs = make([]TelemetryLog, 0)
 	l.recentAIEvents = make([]AIEventLog, 0)
 	l.fingerprintCache = make(map[string]TelemetryLog)
@@ -365,17 +382,14 @@ func (l *Logger) ResetAll() {
 	fmt.Println("[SYSTEM-RESET] Cognitive purge complete. All metrics zeroed.")
 }
 
-// DeleteDomain permanently removes a domain and its associated metrics from the system.
+// DeleteDomain menghapus metrik dan catatan buffer memori domain tertentu dari sistem secara permanen.
 func (l *Logger) DeleteDomain(domain string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	dom := strings.ToLower(domain)
-	
-	// 1. Remove from DomainStats
 	delete(l.DomainStats, dom)
 
-	// 2. Filter out from memory buffer
 	filteredLogs := make([]TelemetryLog, 0)
 	for _, log := range l.recentLogs {
 		if strings.ToLower(log.TargetDomain) != dom {
@@ -387,7 +401,7 @@ func (l *Logger) DeleteDomain(domain string) {
 	fmt.Printf("[DOMAIN-DELETE] Domain '%s' and its metrics have been purged from memory.\n", dom)
 }
 
-// AddDomain manually registers a domain in the telemetry stats so it appears in the dashboard.
+// AddDomain mendaftarkan domain baru secara manual ke dalam pelacakan telemetri dasbor.
 func (l *Logger) AddDomain(domain string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
