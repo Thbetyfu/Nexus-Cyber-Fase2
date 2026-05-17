@@ -165,6 +165,8 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"status":"success","message":"System metrics and AI memory cleared across RAM and Redis."}`)
 	})
+	mux.HandleFunc("/api/upload", uploadShieldHandler(gateway, telemetry))
+	mux.HandleFunc("/api/unlock-reward", rewardUnlockHandler(telemetry))
 	mux.HandleFunc("/api/verify-session", gateway.VerifySessionHandler) // CGNAT Bypass Challenge Validator
 	mux.Handle("/", gatewayHandler)                                     // all other requests go to the proxy
 

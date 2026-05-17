@@ -239,6 +239,9 @@ func (l *Logger) LogTraffic(log TelemetryLog) uuid.UUID {
 				severity = 5
 			}
 
+			// Clean binary payload to prevent Postgres non-UTF8 encoding errors (SQLSTATE 22021)
+			cleanPayload := strings.ToValidUTF8(l.PayloadSample, "?")
+
 			dbLog := models.ThreatLog{
 				SourceIP:      l.SourceIP,
 				Endpoint:      l.Endpoint,
@@ -248,7 +251,7 @@ func (l *Logger) LogTraffic(log TelemetryLog) uuid.UUID {
 				Severity:      severity,
 				UserAgent:     l.DeviceFingerprint, // Or the raw UA if available, we use DeviceFingerprint for now
 				LatencyMs:     int(l.LatencyMS),
-				PayloadSample: l.PayloadSample,
+				PayloadSample: cleanPayload,
 			}
 			dbLog.ID = logID // Use the pre-generated ID
 			
