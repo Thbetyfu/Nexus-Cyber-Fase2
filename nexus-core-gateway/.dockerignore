@@ -1,0 +1,11 @@
+*.log
+*.txt
+tmp_test
+mock_backend.js
+mock_backend.py
+gateway
+main
+.dockerignore
+.gitignore
+Dockerfile
+README.md

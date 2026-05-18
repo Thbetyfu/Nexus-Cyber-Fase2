@@ -1,0 +1,12 @@
+node_modules
+.next
+out
+build
+.next-env.d.ts
+*.log
+.gitignore
+.dockerignore
+Dockerfile
+README.md
+AGENTS.md
+CLAUDE.md
