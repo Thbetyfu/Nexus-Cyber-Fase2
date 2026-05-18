@@ -86,7 +86,7 @@ func ObfuscateHTML(originalHTML string, domain string) string {
             height: 40px;
             border: 2px solid rgba(6, 182, 212, 0.1);
             border-top: 2px solid #06b6d4;
-            border-radius: 50%;
+            border-radius: 50%%;
             animation: spin 0.8s linear infinite;
             margin: 0 auto 20px auto;
         }
