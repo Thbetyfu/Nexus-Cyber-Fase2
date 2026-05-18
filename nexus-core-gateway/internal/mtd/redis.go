@@ -35,10 +35,21 @@ func NewRedisClient() *RedisClientWrapper {
 		WriteTimeout: 1 * time.Second,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	// Coba melakukan Ping dengan retry jika Redis kontainer sedang booting
+	var pingErr error
+	for i := 1; i <= 5; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_, pingErr = client.Ping(ctx).Result()
+		cancel()
+		if pingErr == nil {
+			break
+		}
+		log.Printf("[MTD-REDIS] Startup check: Redis not ready yet. Retrying in 1s... (Attempt %d/5)", i)
+		time.Sleep(1 * time.Second)
+	}
 
-	if _, err := client.Ping(ctx).Result(); err != nil {
+	if pingErr != nil {
+		log.Printf("[MTD-REDIS] Bypassed distributed cache (Redis is offline). Falling back to local memory.")
 		return &RedisClientWrapper{Enabled: false}
 	}
 

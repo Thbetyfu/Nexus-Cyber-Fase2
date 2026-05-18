@@ -17,18 +17,18 @@
 Rencana kerja strategis untuk mengubah seluruh infrastruktur Nexus Cyber menjadi sistem SOC (Security Operations Center) SaaS berbasis langganan yang dapat disewa secara mandiri oleh klien:
 
 ### 🏢 1. Modul Verifikasi Lisensi Global (Backend Layer)
-* [ ] **Task 1: Penyiapan Modul `internal/licensing`**
+* [x] **Task 1: Penyiapan Modul `internal/licensing`**
   * Buat pustaka otentikasi lisensi terpusat di sisi Go Gateway.
   * Tambahkan penanganan parameter variabel lingkungan `NEXUS_LICENSE_KEY`.
-* [ ] **Task 2: Penyiapan Handshake Rutin**
+* [x] **Task 2: Penyiapan Handshake Rutin**
   * Jalankan goroutine asinkron yang melakukan verifikasi masa sewa secara berkala (misal: setiap 1 jam sekali) ke server lisensi pusat (`https://license.nexus-cyber.com/verify`).
-* [ ] **Task 3: Implementasi Fail-Secure Lockout**
+* [x] **Task 3: Implementasi Fail-Secure Lockout**
   * Jika status lisensi `EXPIRED` atau `REVOKED`, gateway akan menangguhkan seluruh rute proxying atau mengembalikan kode pemblokiran total ke browser pengunjung.
 
 ### 🎭 2. Layar Pengunci Dasbor (Frontend Layer)
-* [ ] **Task 4: Dynamic License Guard (React Router Context)**
+* [x] **Task 4: Dynamic License Guard (React Router Context)**
   * Deteksi status validitas lisensi dari respon backend REST/SSE API di dasbor Command Center.
-* [ ] **Task 5: Premium Dark Lockout Overlay**
+* [x] **Task 5: Premium Dark Lockout Overlay**
   * Buat komponen modal overlay berukuran penuh (*full-screen unbypassable overlay*) berwarna gelap premium dengan teks peringatan: `"SISTEM DITANGGUHKAN: Masa sewa langganan Nexus Cyber Anda telah berakhir."`
   * Lindungi layar pengunci agar tidak dapat dilewati menggunakan manipulasi DOM atau inspeksi elemen.
 

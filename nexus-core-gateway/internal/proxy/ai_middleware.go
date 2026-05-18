@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nexus-cyber/nexus-core-gateway/internal/database"
+	"github.com/nexus-cyber/nexus-core-gateway/internal/licensing"
 	"github.com/nexus-cyber/nexus-core-gateway/internal/mtd"
 	"github.com/nexus-cyber/nexus-core-gateway/pkg/logger"
 )
@@ -24,6 +25,24 @@ import (
 // asinkron menggunakan LLM guna memberikan keseimbangan optimal antara latency gateway dan tingkat deteksi ancaman.
 func (np *NexusProxy) AIMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// [GLOBAL LICENSE LOCKOUT CHECK]
+		// Alasan Arsitektural (Why):
+		// Seluruh API Gateway dan rute internal dilindungi di layer teratas middleware.
+		// Jika lisensi kadaluarsa, rute API internal diblokir dengan HTTP 402.
+		if !licensing.IsLicenseValid() {
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+				w.WriteHeader(http.StatusPaymentRequired)
+				w.Write([]byte(`{"status":"error","message":"Nexus [402]: Subscription Expired. Please renew your license."}`))
+				return
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusPaymentRequired)
+			w.Write([]byte(getUnlicensedPaywallHTML(r.Host)))
+			return
+		}
+
 		// [LAYER 0: INTEL BLACKLIST SHIELD]
 		// Alasan Teknis (Why):
 		// IP yang sudah terbukti jahat langsung dibelokkan ke Honeypot tanpa perlu melalui analisis AI lagi.

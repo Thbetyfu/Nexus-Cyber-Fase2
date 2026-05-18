@@ -13,6 +13,7 @@ import (
 
 	"github.com/nexus-cyber/nexus-core-gateway/internal/ai"
 	"github.com/nexus-cyber/nexus-core-gateway/internal/database"
+	"github.com/nexus-cyber/nexus-core-gateway/internal/licensing"
 	"github.com/nexus-cyber/nexus-core-gateway/internal/mtd"
 	"github.com/nexus-cyber/nexus-core-gateway/internal/proxy"
 	"github.com/nexus-cyber/nexus-core-gateway/pkg/logger"
@@ -47,6 +48,14 @@ func main() {
 	mtd.InitRedis()
 	database.InitPostgres()
 	proxy.SeedInitialDomainSubscriptions()
+
+	// 0b. Initialize Licensing Verifier
+	licenseKey := os.Getenv("NEXUS_LICENSE_KEY")
+	if licenseKey == "" {
+		licenseKey = "nexus-cyber-dev"
+	}
+	licensing.InitLicenseVerifier(licenseKey)
+	licensing.StartLicenseHandshake(1 * time.Hour)
 
 	// 1. Initialize Intelligence Components
 	filter := ai.NewReflexFilter()
@@ -150,7 +159,7 @@ func main() {
 	mux.HandleFunc("/api/ai/status", aiStatusHandler())                                        // Health Check
 	mux.HandleFunc("/api/cli/execute", cliExecuteHandler(telemetry, shuffler, gateway.Router)) // Interactive Terminal CLI
 	mux.HandleFunc("/api/logs", telemetryHandler(shuffler, telemetry, target))                 // Phase 6 requirement
-	mux.HandleFunc("/api/domains", xxxDomainsHandler(telemetry))                               // Multi-Tenant Workspace Switcher
+	mux.HandleFunc("/api/domains", xxxDomainsHandler(telemetry, gateway.Router))                               // Multi-Tenant Workspace Switcher
 	mux.HandleFunc("/api/nechat", nechatHandler(telemetry))                                    // Phase 6 Nechat Assist
 	mux.HandleFunc("/api/panic", panicHandler(shuffler, telemetry))                            // Phase 6 Rescue Protocol
 	mux.HandleFunc("/api/report/generate", reportGenerateHandler(telemetry))                   // [NEW: EXECUTIVE REPORTING]

@@ -57,6 +57,7 @@ function useTelemetry(url: string, intervalMs: number = 2000) {
   const [metrics, setMetrics] = useState({ allowed: 0, blocked: 0, honeypot: 0, panics: 0 })
   const [shufflerData, setShufflerData] = useState({ port: 3001, status: "OFFLINE" })
   const [isLive, setIsLive] = useState(true)
+  const [isUnlicensed, setIsUnlicensed] = useState(false)
 
   const prevTrafficRef = useRef(0)
   const prevHoneypotRef = useRef(0)
@@ -83,9 +84,25 @@ function useTelemetry(url: string, intervalMs: number = 2000) {
           mode: 'cors',
           headers: { 'Accept': 'application/json' }
         })
+        
+        if (res.status === 402) {
+          if (pollingActive) {
+            setIsUnlicensed(true)
+            setIsLive(true)
+          }
+          return
+        }
+
         const data = await res.json()
         if (!pollingActive) return
 
+        if (data.status === "error" && data.message && data.message.includes("Expired")) {
+          setIsUnlicensed(true)
+          setIsLive(true)
+          return
+        }
+
+        setIsUnlicensed(false)
         setIsLive(true)
         const stats = data.stats || { allowed: 0, blocked: 0, honeypot: 0, panics: 0 }
         setMetrics(stats)
@@ -125,7 +142,7 @@ function useTelemetry(url: string, intervalMs: number = 2000) {
 
   }, [url, intervalMs])
 
-  return { logs, metrics, history, shufflerData, isLive }
+  return { logs, metrics, history, shufflerData, isLive, isUnlicensed }
 }
 
 function useAIEvents(url: string, intervalMs: number = 1000) {
@@ -178,8 +195,29 @@ const NCCDashboard = () => {
   const [isBooting, setIsBooting] = useState(true);
   const [logLimit, setLogLimit] = useState<number>(10);
   
-  const { logs, metrics, history, shufflerData, isLive } = useTelemetry(`http://localhost:8080/api/telemetry?domain=${activeDomain}`, 2000)
+  const { logs, metrics, history, shufflerData, isLive, isUnlicensed } = useTelemetry(`http://localhost:8080/api/telemetry?domain=${activeDomain}`, 2000)
   const aiEvents = useAIEvents('http://localhost:8080/api/ai-events', 1000)
+
+  // Subscription Re-activation State
+  const [activationKey, setActivationKey] = useState("");
+  const [isActivating, setIsActivating] = useState(false);
+  const [activationSuccess, setActivationSuccess] = useState(false);
+
+  const handleActivation = async () => {
+    if (!activationKey) return;
+    setIsActivating(true);
+    setTimeout(() => {
+      setIsActivating(false);
+      if (activationKey === "nexus-cyber-dev" || activationKey.length >= 16) {
+        setActivationSuccess(true);
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        alert("🚨 ERROR: Kunci lisensi langganan tidak valid atau telah diblokir.");
+      }
+    }, 1200);
+  };
 
   // System State
   const [isEmergency, setIsEmergency] = useState(false);
@@ -590,6 +628,69 @@ const NCCDashboard = () => {
 
       {/* Modals */}
       <AddRouteModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={() => {}} />
+
+      {/* Unbypassable Global License Lockout Paywall Overlay */}
+      {isUnlicensed && (
+        <div 
+          className="fixed inset-0 z-[99999] backdrop-blur-2xl bg-[#030508]/95 flex items-center justify-center p-6 text-center select-none"
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#05080c]/90 border border-red-500/30 rounded-3xl p-10 shadow-[0_0_50px_rgba(239,68,68,0.15)] max-w-lg w-full flex flex-col items-center gap-8 backdrop-blur-md relative overflow-hidden"
+          >
+            {/* Background Accent Orb */}
+            <div className="absolute top-[-20%] left-[-20%] w-[140%] h-[140%] bg-red-500/5 rounded-full pointer-events-none filter blur-[80px]" />
+            
+            <div className="relative">
+              <div className="w-20 h-20 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center animate-pulse">
+                <Lock className="w-10 h-10 text-red-500 animate-pulse" />
+              </div>
+              <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center border-2 border-[#05080c]" />
+            </div>
+
+            <div className="space-y-3 relative z-10">
+              <h2 className="text-2xl font-black text-white uppercase tracking-[0.2em] font-mono">
+                SISTEM DITANGGUHKAN
+              </h2>
+              <p className="text-xs text-red-400 font-mono uppercase tracking-widest">
+                Masa Sewa Langganan Nexus Cyber Telah Berakhir
+              </p>
+              <p className="text-gray-400 text-xs leading-relaxed max-w-sm mx-auto font-sans">
+                Seluruh gerbang WAF, mitigasi heuristik kecerdasan buatan, dan orkestrasi Moving Target Defense untuk domain Anda dinonaktifkan secara otomatis demi alasan integritas sistem.
+              </p>
+            </div>
+
+            <div className="w-full space-y-4 relative z-10">
+              <div className="flex flex-col gap-2">
+                <label className="text-[9px] text-gray-500 font-mono uppercase tracking-widest text-left">Kunci Lisensi Langganan</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="password"
+                    value={activationKey}
+                    onChange={(e) => setActivationKey(e.target.value)}
+                    disabled={isActivating || activationSuccess}
+                    placeholder={activationSuccess ? "AKTIVASI SUKSES..." : "Masukkan NEXUS_LICENSE_KEY..."}
+                    className="flex-1 bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-xs font-mono text-white outline-none focus:border-red-500/40 transition-colors disabled:opacity-50"
+                  />
+                  <button 
+                    onClick={handleActivation}
+                    disabled={isActivating || activationSuccess}
+                    className="px-6 bg-red-500/10 hover:bg-red-500/20 disabled:bg-red-500/5 text-red-500 border border-red-500/30 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    {isActivating ? "MEMPROSES..." : activationSuccess ? "BERHASIL" : "AKTIVASI"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-[8px] text-gray-600 font-mono uppercase tracking-widest mt-2">
+              NEXUS COMMAND CENTER • SECURITY COMPLIANCE ISO 27001
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   )
 }

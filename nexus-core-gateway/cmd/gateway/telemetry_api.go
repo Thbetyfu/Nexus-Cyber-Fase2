@@ -110,7 +110,7 @@ func reportGenerateHandler(telemetry *logger.Logger) http.HandlerFunc {
 	}
 }
 
-func xxxDomainsHandler(telemetry *logger.Logger) http.HandlerFunc {
+func xxxDomainsHandler(telemetry *logger.Logger, router *proxy.DynamicRouter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
@@ -125,7 +125,18 @@ func xxxDomainsHandler(telemetry *logger.Logger) http.HandlerFunc {
 				json.NewEncoder(w).Encode(map[string]string{"status": "error", "message": "Invalid domain for deletion"})
 				return
 			}
+
+			// 1. Hapus secara permanen dari Dynamic Router (caching lokal + Redis)
+			router.RemoveRoute(domain)
+
+			// 2. Hapus secara permanen (hard delete) dari database subscriptions
+			if database.DB != nil {
+				database.DB.Unscoped().Where("domain = ?", domain).Delete(&models.DomainSubscription{})
+			}
+
+			// 3. Bersihkan sisa metrik dan log telemetri di memori WAF
 			telemetry.DeleteDomain(domain)
+
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "Domain purged from matrix"})
 			return
@@ -289,15 +300,15 @@ func cliExecuteHandler(telemetry *logger.Logger, shuffler *mtd.TopologyShuffler,
 				"  - @nexus [query]        : Consult local AI about threats\n" +
 				"  - clear                 : Clear terminal session"
 
-		case cmd == "status":
+		case cmd == "status" || cmd == "/status":
 			port, next := shuffler.GetStatus()
 			response = fmt.Sprintf("[STATUS] MTD Active Port: %d | Next Shuffle: %ds | Backend: ONLINE", port, next)
 
-		case cmd == "stats":
+		case cmd == "stats" || cmd == "/stats":
 			response = fmt.Sprintf("[STATS] Allowed: %d | Blocked: %d | Honeypot: %d", 
 				telemetry.TotalAllowed, telemetry.TotalBlocked, telemetry.TotalHoneypot)
 
-		case cmd == "shuffle":
+		case cmd == "shuffle" || cmd == "/shuffle":
 			shuffler.ManualShuffle()
 			response = "[ACTION] Manual Topology Rotation Triggered. New port mapping established."
 

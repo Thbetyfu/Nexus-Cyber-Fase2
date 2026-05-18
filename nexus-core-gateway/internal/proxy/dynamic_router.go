@@ -52,7 +52,11 @@ func (dr *DynamicRouter) Lookup(host string) (string, bool) {
 	entry, exists := dr.cache[host]
 	dr.mu.RUnlock()
 
-	if exists && time.Now().Before(entry.ExpiresAt) {
+	// [SAAS RESILIENCY FALLBACK]
+	// Alasan Keamanan (Why):
+	// Jika Redis tidak diaktifkan atau offline, kita tetap percaya 100% pada cache memori lokal
+	// dan mengabaikan kedaluwarsa TTL agar perlindungan domain tidak terputus setelah 10 detik.
+	if exists && (time.Now().Before(entry.ExpiresAt) || mtd.MtdRedis == nil || !mtd.MtdRedis.Enabled) {
 		return entry.TargetURL, true
 	}
 
@@ -115,4 +119,26 @@ func (dr *DynamicRouter) GetAllRoutes() (map[string]string, error) {
 		return mtd.MtdRedis.Client.HGetAll(ctx, "nexus:routes").Result()
 	}
 	return nil, nil
+}
+
+// RemoveRoute menghapus pemetaan rute secara instan dari memori lokal dan Redis terdistribusi.
+func (dr *DynamicRouter) RemoveRoute(host string) error {
+	// 1. Hapus dari Cache Memori Lokal
+	dr.mu.Lock()
+	delete(dr.cache, host)
+	dr.mu.Unlock()
+
+	// 2. Hapus secara Global dari Redis
+	if mtd.MtdRedis != nil && mtd.MtdRedis.Enabled {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		err := mtd.MtdRedis.Client.HDel(ctx, "nexus:routes", host).Err()
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Printf("[ROUTER] Mapping removed: %s", host)
+	return nil
 }

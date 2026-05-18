@@ -174,7 +174,8 @@ export default function AiTerminalWidget() {
             setSuggestions([]);
             setCommandHistory(prev => [...prev, cmd].slice(-20));
 
-            if (cmd.toLowerCase() === 'clear') {
+            const cmdLower = cmd.toLowerCase();
+            if (cmdLower === 'clear' || cmdLower === '/clear') {
                 setStream([]);
                 return;
             }

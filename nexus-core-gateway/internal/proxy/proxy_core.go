@@ -18,6 +18,7 @@ import (
 
 	"github.com/nexus-cyber/nexus-core-gateway/internal/ai"
 	"github.com/nexus-cyber/nexus-core-gateway/internal/avse"
+	"github.com/nexus-cyber/nexus-core-gateway/internal/licensing"
 	"github.com/nexus-cyber/nexus-core-gateway/internal/mtd"
 	"github.com/nexus-cyber/nexus-core-gateway/pkg/logger"
 )
@@ -172,6 +173,23 @@ func (np *NexusProxy) getProxy() *httputil.ReverseProxy {
 
 // ServeHTTP adalah pintu masuk utama seluruh paket data HTTP yang melintasi gerbang proxy.
 func (np *NexusProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// [GLOBAL LICENSE LOCKOUT CHECK]
+	// Alasan Arsitektural (Why):
+	// Perlindungan Moving Target Defense dan WAF dinonaktifkan secara fail-secure jika lisensi terverifikasi kadaluwarsa (EXPIRED).
+	// Mengembalikan paywall premium HTML untuk pengunjung biasa, atau JSON terstruktur untuk API dasbor.
+	if !licensing.IsLicenseValid() {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusPaymentRequired)
+			w.Write([]byte(`{"status":"error","message":"Nexus [402]: Subscription Expired. Please renew your license."}`))
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusPaymentRequired)
+		w.Write([]byte(getUnlicensedPaywallHTML(r.Host)))
+		return
+	}
+
 	// 1. Capture payload dan bersihkan malware visual via AVSE.
 	var body []byte
 	if r.Body != nil {
