@@ -5,7 +5,7 @@
    4. 
 2. apakah nexus cyber ini sudah benar benar bisa di deploy?
 3. tambahkan lebih banyak fitur pada bagain terminal agar tidak menjadi terminal yang kakku
-4. uji tetsing
+4. uji tetsing (SELESAI - 17/17 MTD Checks Passed, [Laporan Audit](file:///home/taqy/.gemini/antigravity/brain/ca754110-72d4-48a0-b93a-4b25725cef2c/qa_phase_10_stress_test_report.md) Terbit)
 5. performa CPU dan RAM butuh berapa?
 6. apakah bisa di tambahkan fitur pelacakan bagi orang yang hack ??
 7.

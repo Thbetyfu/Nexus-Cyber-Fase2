@@ -107,13 +107,17 @@ func main() {
 		target = fmt.Sprintf("http://%s:3001", backendHost)
 	}
 
-	// 5. MTD: Topology Shuffler (CSPRNG port rotation)
-	// We use the same backendHost to support Docker -> Host communication.
+	// Mengurai port dari URL TARGET_BACKEND secara dinamis
+	targetPort := 80
+	if idx := strings.LastIndex(target, ":"); idx != -1 && idx > 5 {
+		fmt.Sscanf(target[idx+1:], "%d", &targetPort)
+	}
+
 	var gateway *proxy.NexusProxy
 
 	shuffler := mtd.NewTopologyShuffler(
 		backendHost, // baseHost
-		[]int{3001}, // portPool (hanya 3001 untuk test mockup OJK)
+		[]int{targetPort}, // portPool dinamis sesuai port backend
 		60,          // rotate every 60 seconds
 		func(newTarget mtd.TargetBackend) {
 			// Graceful Handoff: Update proxy without dropping in-flight requests
