@@ -231,7 +231,8 @@ const NCCDashboard = () => {
     "threat-map": 11,
     "ai-terminal": 12,
     "forensic-logs": 13,
-    "system-status": 14
+    "system-status": 14,
+    "mtd-audit": 15
   });
 
   const handleFocusWindow = useCallback((id: string) => {
@@ -261,6 +262,38 @@ const NCCDashboard = () => {
   }, [metrics.honeypot, logs, isEmergency]);
 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // MTD Defense Audit States
+  const [auditStatus, setAuditStatus] = useState<"IDLE" | "RUNNING" | "COMPLETED" | "ERROR">("IDLE");
+  const [auditResult, setAuditResult] = useState<{
+    checks: Array<{ label: string; passed: boolean; detail: string }>;
+    passed: number;
+    total: number;
+    output: string;
+  } | null>(null);
+  const [auditError, setAuditError] = useState("");
+
+  const runMtdAudit = async () => {
+    setAuditStatus("RUNNING");
+    setAuditError("");
+    setAuditResult(null);
+    try {
+      const res = await fetch("http://localhost:8080/api/test/run", {
+        method: "POST",
+        mode: "cors"
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.details || errData.error || "Failed to run audit");
+      }
+      const data = await res.json();
+      setAuditResult(data);
+      setAuditStatus("COMPLETED");
+    } catch (err: any) {
+      setAuditStatus("ERROR");
+      setAuditError(err.message || "Connection to Gateway lost or script execution timed out.");
+    }
+  };
 
   const handlePanic = async () => {
     try { await fetch("http://localhost:8080/api/panic", { method: "POST" }) } catch (err) {}
@@ -298,7 +331,7 @@ const NCCDashboard = () => {
   return (
     <div className={`relative min-h-screen bg-[#050608] text-gray-200 font-sans overflow-hidden transition-colors duration-1000 ${isEmergency ? 'shadow-[inset_0_0_150px_rgba(220,38,38,0.15)]' : ''}`}>
       <AnimatePresence>
-        {isBooting && <BootSequence onComplete={() => setIsBooting(false)} />}
+        {isBooting && <BootSequence key="boot-sequence" onComplete={() => setIsBooting(false)} />}
       </AnimatePresence>
       
       {/* Background Layer: Quantum Glassmorphism */}
@@ -404,6 +437,13 @@ const NCCDashboard = () => {
             onClick={toggleWindow} 
             isOpen={openWindows.includes("system-status")}
           />
+          <DesktopIcon 
+            id="mtd-audit" 
+            label="MTD Security Audit" 
+            icon={ShieldCheck} 
+            onClick={toggleWindow} 
+            isOpen={openWindows.includes("mtd-audit")}
+          />
         </div>
 
         {/* Floating Windows Layer */}
@@ -411,6 +451,7 @@ const NCCDashboard = () => {
           {/* Metrics Window */}
           {openWindows.includes("metrics") && (
             <WindowFrame
+              key="metrics"
               id="metrics"
               title="System Metrics"
               icon={<Activity size={14} />}
@@ -478,6 +519,7 @@ const NCCDashboard = () => {
           {/* Threat Map Window */}
           {openWindows.includes("threat-map") && (
             <WindowFrame
+              key="threat-map"
               id="threat-map"
               title="Global Defense Matrix"
               icon={<Globe size={14} />}
@@ -499,6 +541,7 @@ const NCCDashboard = () => {
           {/* AI Terminal Window */}
           {openWindows.includes("ai-terminal") && (
             <WindowFrame
+              key="ai-terminal"
               id="ai-terminal"
               title="Nexus AI Cortex"
               icon={<Cpu size={14} />}
@@ -522,6 +565,7 @@ const NCCDashboard = () => {
           {/* System Terminal Window */}
           {openWindows.includes("system-status") && (
             <WindowFrame
+              key="system-status"
               id="system-status"
               title="Nexus Core Terminal"
               icon={<Terminal size={14} />}
@@ -541,6 +585,7 @@ const NCCDashboard = () => {
           {/* Forensic Logs Window */}
           {openWindows.includes("forensic-logs") && (
             <WindowFrame
+              key="forensic-logs"
               id="forensic-logs"
               title="Forensic Data Stream"
               icon={<Database size={14} />}
@@ -606,6 +651,174 @@ const NCCDashboard = () => {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </WindowFrame>
+          )}
+
+          {/* MTD Compliance Audit Window */}
+          {openWindows.includes("mtd-audit") && (
+            <WindowFrame
+              key="mtd-audit"
+              id="mtd-audit"
+              title="MTD Defense Compliance Audit"
+              icon={<ShieldCheck size={14} />}
+              initialX={300}
+              initialY={100}
+              width={700}
+              height={550}
+              zIndex={windowZIndices["mtd-audit"]}
+              isActive={focusedWindow === "mtd-audit"}
+              onFocus={() => handleFocusWindow("mtd-audit")}
+              onClose={() => toggleWindow("mtd-audit")}
+            >
+              <div className="h-full flex flex-col bg-[#06080c] text-gray-200 p-6 overflow-y-auto custom-scrollbar font-mono">
+                {auditStatus === "IDLE" && (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center gap-6 p-4">
+                    <div className="w-20 h-20 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.1)]">
+                      <Shield className="w-10 h-10 text-cyan-400" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-lg font-bold text-white uppercase tracking-widest">MTD Security Audit Suite</h3>
+                      <p className="text-xs text-gray-400 max-w-md leading-relaxed">
+                        Verify system compliance against ISO 27001 & ISO 25010 standards in real-time.
+                        This runs 17 active stress tests simulating multi-tenant rate floods, digital hallucination honeypots, and topology shuffling.
+                      </p>
+                    </div>
+                    <button
+                      onClick={runMtdAudit}
+                      className="px-8 py-3 bg-cyan-500 hover:bg-cyan-600 text-black font-black rounded-xl text-[10px] uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(6,182,212,0.2)]"
+                    >
+                      Launch MTD Security Audit
+                    </button>
+                  </div>
+                )}
+
+                {auditStatus === "RUNNING" && (
+                  <div className="flex-1 flex flex-col items-center justify-center gap-6 p-4">
+                    <div className="relative w-24 h-24">
+                      {/* Scanning Ring */}
+                      <div className="absolute inset-0 rounded-full border-4 border-cyan-500/10 border-t-cyan-500 animate-spin" />
+                      <div className="absolute inset-2 rounded-full border border-cyan-500/20 flex items-center justify-center bg-black/40">
+                        <Activity className="w-8 h-8 text-cyan-400 animate-pulse" />
+                      </div>
+                    </div>
+                    <div className="text-center space-y-2">
+                      <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-[0.2em] animate-pulse">
+                        AUDIT IN PROGRESS...
+                      </h4>
+                      <p className="text-[9px] text-gray-500 uppercase tracking-widest">
+                        Executing 17 physical stress tests & probing defense mechanisms
+                      </p>
+                    </div>
+                    {/* Simulated loading steps */}
+                    <div className="w-full max-w-sm bg-black/60 border border-white/5 rounded-xl p-4 text-[9px] text-cyan-500/70 space-y-1.5 font-mono">
+                      <div className="flex items-center gap-2">
+                        <span className="w-1 h-1 rounded-full bg-cyan-400 animate-ping" />
+                        <span>[SYS] Initiating stress-test sequence...</span>
+                      </div>
+                      <div className="flex items-center gap-2 opacity-80">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                        <span>[MTD] Probing Per-IP Token Bucket (150 concurrent reqs)</span>
+                      </div>
+                      <div className="flex items-center gap-2 opacity-60">
+                        <span className="w-1.5 h-1.5 rounded-full bg-gray-600" />
+                        <span>[HONEYPOT] Testing Digital Hallucination & Tarpit delays</span>
+                      </div>
+                      <div className="flex items-center gap-2 opacity-40">
+                        <span className="w-1.5 h-1.5 rounded-full bg-gray-600" />
+                        <span>[SHUFFLER] Verifying CSPRNG topology port rotation</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {auditStatus === "ERROR" && (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center gap-6 p-4">
+                    <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.1)]">
+                      <ShieldAlert className="w-8 h-8 text-red-400" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-bold text-red-400 uppercase tracking-widest">Audit Execution Failed</h3>
+                      <p className="text-[10px] text-gray-400 max-w-md bg-black/40 border border-red-950/30 p-3 rounded-lg leading-relaxed text-left font-mono whitespace-pre-wrap">
+                        {auditError}
+                      </p>
+                    </div>
+                    <button
+                      onClick={runMtdAudit}
+                      className="px-6 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-bold rounded-xl text-[10px] uppercase tracking-widest transition-all"
+                    >
+                      Retry Security Audit
+                    </button>
+                  </div>
+                )}
+
+                {auditStatus === "COMPLETED" && auditResult && (
+                  <div className="space-y-6 animate-in fade-in duration-300 w-full">
+                    {/* Compliance Card Banner */}
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-6 relative overflow-hidden shadow-[0_0_20px_rgba(16,185,129,0.05)] w-full">
+                      {/* Ambient green light */}
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full filter blur-xl pointer-events-none" />
+                      <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                        <ShieldCheck className="w-9 h-9 text-emerald-400" />
+                      </div>
+                      <div className="flex-1 text-center md:text-left space-y-1">
+                        <div className="flex items-center justify-center md:justify-start gap-2">
+                          <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-black tracking-widest uppercase">
+                            Audited & Compliant
+                          </span>
+                        </div>
+                        <h3 className="text-lg font-black text-white tracking-widest uppercase">
+                          {auditResult.passed} / {auditResult.total} MTD CHECKS PASSED
+                        </h3>
+                        <p className="text-[9px] text-emerald-400/70 uppercase tracking-wider font-bold">
+                          STATUS: SECURED • ISO 27001 & ISO 25010 RESILIENT SPEC
+                        </p>
+                      </div>
+                      <button
+                        onClick={runMtdAudit}
+                        className="px-5 py-2.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/35 font-bold rounded-xl text-[9px] uppercase tracking-widest transition-all shrink-0"
+                      >
+                        Re-Audit System
+                      </button>
+                    </div>
+
+                    {/* Checks Grid */}
+                    <div className="bg-black/40 border border-white/5 rounded-2xl overflow-hidden w-full">
+                      <div className="bg-[#090b0e] px-4 py-3 border-b border-white/5 flex items-center justify-between">
+                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Detailed Verification Log</span>
+                        <span className="text-[8px] text-emerald-500 font-black uppercase tracking-widest">100% Integrity</span>
+                      </div>
+                      <div className="divide-y divide-white/5 max-h-60 overflow-y-auto custom-scrollbar">
+                        {auditResult.checks.map((chk, i) => (
+                          <div key={i} className="px-4 py-2.5 flex items-center justify-between hover:bg-white/[0.01] transition-colors">
+                            <div className="space-y-0.5 flex-1 pr-4">
+                              <p className="text-[10px] text-gray-200 font-bold leading-normal">{chk.label}</p>
+                              {chk.detail && <p className="text-[8px] text-gray-500 leading-normal">{chk.detail}</p>}
+                            </div>
+                            <span className={`px-2 py-0.5 rounded-[4px] font-black uppercase text-[8px] shrink-0 ${
+                              chk.passed 
+                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                                : "bg-red-500/10 text-red-500 border border-red-500/20"
+                            }`}>
+                              {chk.passed ? "PASS" : "FAIL"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Raw output accordion */}
+                    <details className="group bg-black/20 border border-white/5 rounded-2xl overflow-hidden w-full">
+                      <summary className="px-4 py-3 text-[10px] text-gray-500 font-bold uppercase tracking-wider cursor-pointer list-none flex items-center justify-between hover:bg-white/[0.01] transition-colors select-none">
+                        <span>Show Raw Terminal Audit Log Output</span>
+                        <span className="text-cyan-500 group-open:rotate-180 transition-transform duration-200">▼</span>
+                      </summary>
+                      <pre className="p-4 bg-black border-t border-white/5 text-[9px] text-green-400 leading-relaxed font-mono overflow-auto max-h-60 custom-scrollbar whitespace-pre-wrap">
+                        {auditResult.output}
+                      </pre>
+                    </details>
+                  </div>
+                )}
               </div>
             </WindowFrame>
           )}

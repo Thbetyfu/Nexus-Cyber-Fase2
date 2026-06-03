@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -290,6 +291,7 @@ func cliExecuteHandler(telemetry *logger.Logger, shuffler *mtd.TopologyShuffler,
 				"  - status                : Check MTD & Backend Health\n" +
 				"  - stats                 : Show global traffic metrics\n" +
 				"  - shuffle               : Trigger manual topology rotation\n" +
+				"  - /audit                : Run MTD Compliance stress tests (17 checks)\n" +
 				"  - /ban [IP]             : Blacklist an attacker IP manually\n" +
 				"  - /unban [IP]           : Restore/unban an IP address\n" +
 				"  - /sub [domain]         : Activate premium SaaS PACS shield for a client\n" +
@@ -299,6 +301,20 @@ func cliExecuteHandler(telemetry *logger.Logger, shuffler *mtd.TopologyShuffler,
 				"  - /simulate-attack [lvl]: Launch active attack simulation (high/low)\n" +
 				"  - @nexus [query]        : Consult local AI about threats\n" +
 				"  - clear                 : Clear terminal session"
+
+		case cmd == "audit" || cmd == "/audit":
+			cmdExec := exec.Command("python", "../scripts/test_mtd_defense.py")
+			outputBytes, err := cmdExec.CombinedOutput()
+			if err != nil {
+				cmdExec3 := exec.Command("python3", "../scripts/test_mtd_defense.py")
+				outputBytes3, err3 := cmdExec3.CombinedOutput()
+				if err3 != nil {
+					response = fmt.Sprintf("[ERROR] Failed to run test script. python: %v | python3: %v\nOutput: %s", err, err3, string(outputBytes))
+					break
+				}
+				outputBytes = outputBytes3
+			}
+			response = string(outputBytes)
 
 		case cmd == "status" || cmd == "/status":
 			port, next := shuffler.GetStatus()
@@ -472,5 +488,87 @@ func cliExecuteHandler(telemetry *logger.Logger, shuffler *mtd.TopologyShuffler,
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"response": response})
+	}
+}
+
+// runTestHandler executes the MTD verification python script and returns parsed metrics.
+func runTestHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// Run the python test script. It is located in scripts/ relative to workspace root.
+		// Since we run from nexus-core-gateway, path is ../scripts/test_mtd_defense.py
+		cmd := exec.Command("python", "../scripts/test_mtd_defense.py")
+		outputBytes, err := cmd.CombinedOutput()
+		if err != nil {
+			// Fallback to python3 if python fails
+			cmd3 := exec.Command("python3", "../scripts/test_mtd_defense.py")
+			outputBytes3, err3 := cmd3.CombinedOutput()
+			if err3 != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(map[string]string{
+					"error":   "Failed to execute MTD test script",
+					"details": fmt.Sprintf("python err: %v | python3 err: %v\nOutput: %s", err, err3, string(outputBytes)),
+				})
+				return
+			}
+			outputBytes = outputBytes3
+		}
+
+		outputStr := string(outputBytes)
+		lines := strings.Split(outputStr, "\n")
+
+		type AuditCheck struct {
+			Label  string `json:"label"`
+			Passed bool   `json:"passed"`
+			Detail string `json:"detail"`
+		}
+
+		var checks []AuditCheck
+		passedCount := 0
+
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "[PASS]") || strings.HasPrefix(trimmed, "[FAIL]") {
+				passed := strings.HasPrefix(trimmed, "[PASS]")
+				content := ""
+				if passed {
+					content = strings.TrimPrefix(trimmed, "[PASS]")
+				} else {
+					content = strings.TrimPrefix(trimmed, "[FAIL]")
+				}
+				content = strings.TrimSpace(content)
+
+				parts := strings.SplitN(content, "|", 2)
+				label := strings.TrimSpace(parts[0])
+				detail := ""
+				if len(parts) > 1 {
+					detail = strings.TrimSpace(parts[1])
+				}
+
+				checks = append(checks, AuditCheck{
+					Label:  label,
+					Passed: passed,
+					Detail: detail,
+				})
+
+				if passed {
+					passedCount++
+				}
+			}
+		}
+
+		response := map[string]interface{}{
+			"output": outputStr,
+			"checks": checks,
+			"passed": passedCount,
+			"total":  len(checks),
+		}
+
+		json.NewEncoder(w).Encode(response)
 	}
 }

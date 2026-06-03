@@ -190,6 +190,7 @@ func main() {
 	mux.HandleFunc("/api/upload", uploadShieldHandler(gateway, telemetry))
 	mux.HandleFunc("/api/unlock-reward", rewardUnlockHandler(telemetry))
 	mux.HandleFunc("/api/verify-session", gateway.VerifySessionHandler) // CGNAT Bypass Challenge Validator
+	mux.HandleFunc("/api/test/run", runTestHandler())
 	mux.Handle("/", gatewayHandler)                                     // all other requests go to the proxy
 
 	// 9. Root Matrix Shield: Wrap EVERYTHING in AI Intelligence

@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🖥️ Nexus Cyber - Command Center Admin Dashboard (Tahap 2)
 
-## Getting Started
+Dasbor Security Operations Center (SOC) berbasis web premium yang dibangun menggunakan **Next.js 15 (Turbopack)**, **TailwindCSS**, **Framer Motion**, dan **Lucide Icons**. Dasbor ini berfungsi sebagai pusat visualisasi telemetri pertahanan, mitigasi ancaman waktu-nyata (real-time), dan kepatuhan Moving Target Defense (MTD).
 
-First, run the development server:
+---
 
+## 📸 Antarmuka Dashboard (Screenshots)
+
+Berikut adalah visualisasi sistem nyata hasil audit uji stres pertahanan siber pada fase 2:
+
+### 1. Pemuatan Modul Sistem (Boot Sequence)
+Menampilkan inisialisasi modul persandian pasca-kuantum (PQC ML-KEM-768), sinkronisasi AI lokal, dan kalibrasi matriks topologi MTD secara dinamis dan aman.
+
+![System Boot Sequence](../docs/img/Opening-Nexus-Cyber.jpeg)
+
+### 2. Panel Kendali Utama (SOC Command Center Dashboard)
+Pusat kendali taktis terpadu dengan orkestrasi windows dinamis. Menampilkan grafik laju paket, visualisasi peta serangan siber global (*Geospatial Threat Map*), telemetri logs forensik, terminal kendali administrator, dan panel **MTD Security Audit** untuk pengujian stres langsung.
+
+![SOC Command Center Dashboard](../docs/img/Dashboard-Nexus-Cyber.jpeg)
+
+### 3. Modul Kunci Lisensi Keamanan (Licensing Lockout Overlay)
+Layar pengunci gelap premium yang menangguhkan sistem WAF dan memblokir akses dasbor secara absolut jika lisensi langganan klien terdeteksi tidak valid, kedaluwarsa, atau dicabut.
+
+![System License Lockout](../docs/img/System-Lock-Nexus-Cyber.jpeg)
+
+---
+
+## 🛠️ Panduan Memulai (Getting Started)
+
+### 1. Prasyarat
+Pastikan Anda telah menginstal Node.js versi LTS terbaru pada sistem lokal Anda.
+
+### 2. Pemasangan Dependensi
+Pasang semua paket pustaka yang dibutuhkan menggunakan NPM:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 3. Menjalankan Server Pengembangan Lokal
+Jalankan dev server Next.js (port default dikunci pada **port 3001**):
+```bash
+npm run dev
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 4. Akses Dasbor
+Buka tautan [http://localhost:3001](http://localhost:3001) pada peramban web Anda.
+*(Gunakan lisensi langganan bypass pengembangan `nexus-cyber-dev` untuk membuka kunci layar penangguhan).*

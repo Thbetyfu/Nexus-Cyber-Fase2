@@ -35,8 +35,10 @@ const Taskbar: React.FC<TaskbarProps> = ({
   activeApps 
 }) => {
   const [time, setTime] = useState(new Date());
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
@@ -137,7 +139,7 @@ const Taskbar: React.FC<TaskbarProps> = ({
           <div className="flex items-center gap-2">
             <Clock size={14} />
             <span className="text-[11px] font-mono font-bold tracking-tighter w-16">
-              {time.toLocaleTimeString("id-ID", { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              {mounted ? time.toLocaleTimeString("id-ID", { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) : "--:--:--"}
             </span>
           </div>
         </div>
