@@ -2,7 +2,14 @@
 
 **Autonomous Tactical Defense Grid & Geospatial Threat Intelligence Command Center**
 
-![Nexus-Cyber tahap 2](./docs/img/Opening-Nexus-Cyber.jpeg)
+### 1. Pemuatan Modul Keamanan (Boot Sequence)
+![System Boot Sequence](./docs/img/Opening-Nexus-Cyber.jpeg)
+
+### 2. Panel Kendali Utama (SOC Command Center Dashboard)
+![SOC Command Center Dashboard](./docs/img/Dashboard-Nexus-Cyber.jpeg)
+
+### 3. Layar Pengunci Lisensi (Subscription Lockout Overlay)
+![System License Lockout](./docs/img/System-Lock-Nexus-Cyber.jpeg)
 
 Nexus Cyber adalah sistem pertahanan siber otonom (SOC) yang menggabungkan AI Lokal (**Nexus-Brain**) dengan teknologi **Moving Target Defense (MTD)** untuk melindungi infrastruktur kritis dari serangan modern.
 
