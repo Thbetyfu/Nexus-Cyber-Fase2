@@ -1,7 +1,7 @@
 # 🛡️ Nexus-Cyber tahap 2
 **Autonomous Tactical Defense Grid & Geospatial Threat Intelligence Command Center**
 
-![Nexus Cyber Dashboard V13](./docs/img/dashboard_v13.png)
+![Nexus-Cyber tahap 2](./docs/img/dashboard_tahap_2.png)
 
 Nexus Cyber adalah sistem pertahanan siber otonom (SOC) yang menggabungkan AI Lokal (**Nexus-Brain**) dengan teknologi **Moving Target Defense (MTD)** untuk melindungi infrastruktur kritis dari serangan modern.
 
